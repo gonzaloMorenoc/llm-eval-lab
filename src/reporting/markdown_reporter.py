@@ -53,6 +53,18 @@ def generate_markdown_report(summary: RunSummary, output_dir: str) -> str:
             w(f"| {metric} | {avg:.3f} | {t} | {status} | {note} |")
         w("")
 
+    # DeepEval metrics summary
+    if summary.deepeval_aggregate:
+        w("## DeepEval Metrics Summary\n")
+        w("| Metric | Avg Score | Threshold | Status |")
+        w("|--------|-----------|-----------|--------|")
+        deepeval_thresholds = config.get("deepeval", {}).get("thresholds", {})
+        for metric, avg in sorted(summary.deepeval_aggregate.items()):
+            t = deepeval_thresholds.get(metric, 0.5)
+            status = "PASS" if avg >= t else "FAIL"
+            w(f"| {metric} | {avg:.3f} | {t} | {status} |")
+        w("")
+
     # Results by category
     w("## Results by Category\n")
     w("| Category | Total | Passed | Failed | Pass Rate |")

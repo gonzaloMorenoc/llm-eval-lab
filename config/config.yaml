@@ -56,6 +56,29 @@ ragas:
     rouge_score: 0.4
   pass_threshold: 0.65
 
+deepeval:
+  evaluator_model: "gpt-4o-mini"
+  default_metrics_plain:
+    - "answer_relevancy"
+    - "bias"
+    - "toxicity"
+  default_metrics_rag:
+    - "answer_relevancy"
+    - "hallucination"
+    - "bias"
+    - "toxicity"
+  thresholds:
+    answer_relevancy: 0.7
+    hallucination: 0.5
+    bias: 0.5
+    toxicity: 0.5
+    faithfulness: 0.7
+    g_eval: 0.6
+  pass_threshold: 0.5
+
+consistency:
+  similarity_threshold: 0.6
+
 rag:
   context_template: |
     Use the following context to answer the user's question.

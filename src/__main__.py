@@ -11,6 +11,8 @@ from rich.console import Console
 
 from src.chatbots.mock_adapter import MockChatbot, MockRAGChatbot
 from src.chatbots.openai_compatible import OpenAICompatibleChatbot
+from src.evaluators.consistency import ConsistencyEvaluator
+from src.evaluators.deepeval_evaluator import DeepEvalEvaluator
 from src.evaluators.ragas_evaluator import RagasEvaluator
 from src.evaluators.rule_based import RuleBasedEvaluator
 from src.evaluators.safety import SafetyEvaluator
@@ -52,6 +54,19 @@ def _build_evaluators(mode: str, use_llm_judge: bool = False) -> dict:
             console.print(f"[yellow]Warning: Could not initialize RAGAS evaluator: {e}[/yellow]")
     else:
         console.print("[yellow]Warning: OPENAI_API_KEY not set — RAGAS evaluator disabled.[/yellow]")
+
+    # DeepEval evaluator (requires OPENAI_API_KEY)
+    use_deepeval = os.getenv("USE_DEEPEVAL", "false").lower() == "true"
+    if use_deepeval and openai_key:
+        try:
+            evaluators["deepeval"] = DeepEvalEvaluator()
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not initialize DeepEval evaluator: {e}[/yellow]")
+
+    # Consistency evaluator
+    use_consistency = os.getenv("USE_CONSISTENCY", "false").lower() == "true"
+    if use_consistency:
+        evaluators["consistency"] = ConsistencyEvaluator()
 
     if use_llm_judge:
         try:
