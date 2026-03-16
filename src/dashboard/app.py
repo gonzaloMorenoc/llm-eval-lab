@@ -54,10 +54,10 @@ def main() -> None:
     st.markdown("")
     nav_cols = st.columns(4)
     nav_items = [
-        ("🚀", "Run Evaluation", "Lanza evaluaciones contra providers", "src/dashboard/pages/1_run.py"),
-        ("📊", "Results", "Visualiza métricas y resultados", "src/dashboard/pages/2_results.py"),
-        ("🔄", "Compare", "Compara ejecuciones side-by-side", "src/dashboard/pages/3_compare.py"),
-        ("📝", "Test Cases", "Gestiona datasets de test", "src/dashboard/pages/4_test_cases.py"),
+        ("🚀", "Run Evaluation", "Lanza evaluaciones contra providers", "pages/1_run.py"),
+        ("📊", "Results", "Visualiza métricas y resultados", "pages/2_results.py"),
+        ("🔄", "Compare", "Compara ejecuciones side-by-side", "pages/3_compare.py"),
+        ("📝", "Test Cases", "Gestiona datasets de test", "pages/4_test_cases.py"),
     ]
     for col, (icon, title, desc, page) in zip(nav_cols, nav_items):
         with col:
