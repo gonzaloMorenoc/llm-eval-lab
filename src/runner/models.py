@@ -15,7 +15,7 @@ class TestCase(BaseModel):
     input: str | list[dict]  # str for single-turn, list[dict] for multi-turn
     expected_behavior: str
     reference: str | None = None
-    evaluation_type: list[Literal["rule_based", "llm_judge", "ragas", "safety"]]
+    evaluation_type: list[Literal["rule_based", "llm_judge", "ragas", "safety", "deepeval", "consistency"]]
     ragas_metrics: list[str] | None = None  # None = use defaults from config.yaml
     severity: Literal["critical", "high", "medium", "low"] = "medium"
     metadata: dict = Field(default_factory=dict)
@@ -72,4 +72,5 @@ class RunSummary(BaseModel):
     critical_failures: int = 0
     by_category: dict[str, CategoryStats] = Field(default_factory=dict)
     ragas_aggregate: dict[str, float] = Field(default_factory=dict)
+    deepeval_aggregate: dict[str, float] = Field(default_factory=dict)
     results: list[TestResult] = Field(default_factory=list)
