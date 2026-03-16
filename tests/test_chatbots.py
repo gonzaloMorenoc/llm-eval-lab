@@ -38,6 +38,34 @@ class TestMockChatbot:
         assert isinstance(mock_chatbot, BaseChatbot)
         assert not isinstance(mock_chatbot, BaseRAGChatbot)
 
+    @pytest.mark.parametrize(
+        "query,expected_keyword",
+        [
+            ("What is machine learning?", "learning"),
+            ("Tell me about Python", "Python"),
+        ],
+    )
+    async def test_keyword_responses(self, mock_chatbot: MockChatbot, query: str, expected_keyword: str):
+        messages = [{"role": "user", "content": query}]
+        response = await mock_chatbot.complete(messages)
+        assert expected_keyword.lower() in response.content.lower()
+
+    async def test_response_latency_is_positive(self, mock_chatbot: MockChatbot):
+        messages = [{"role": "user", "content": "Hello"}]
+        response = await mock_chatbot.complete(messages)
+        assert response.latency_ms > 0
+
+    async def test_multi_turn_messages(self, mock_chatbot: MockChatbot):
+        """Mock chatbot should handle multi-turn message lists."""
+        messages = [
+            {"role": "user", "content": "My name is Alice."},
+            {"role": "assistant", "content": "Nice to meet you!"},
+            {"role": "user", "content": "What is Python?"},
+        ]
+        response = await mock_chatbot.complete(messages)
+        assert isinstance(response, ChatbotResponse)
+        assert response.content
+
 
 class TestMockRAGChatbot:
     async def test_is_rag(self, mock_rag_chatbot: MockRAGChatbot):
@@ -70,3 +98,8 @@ class TestMockRAGChatbot:
         rag_resp = await mock_rag_chatbot.complete(messages)
         assert plain_resp.retrieved_contexts is None
         assert rag_resp.retrieved_contexts is not None
+
+    async def test_contexts_are_strings(self, mock_rag_chatbot: MockRAGChatbot):
+        messages = [{"role": "user", "content": "What is Python?"}]
+        response = await mock_rag_chatbot.complete(messages)
+        assert all(isinstance(ctx, str) for ctx in response.retrieved_contexts)

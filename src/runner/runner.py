@@ -235,6 +235,19 @@ class EvalRunner:
             for m, scores in ragas_scores.items()
         }
 
+        # DeepEval aggregate scores
+        deepeval_scores: dict[str, list[float]] = {}
+        for r in results_list:
+            for ev in r.evaluations:
+                if ev.evaluator == "deepeval" and ev.details.get("metric_scores"):
+                    for metric_name, score in ev.details["metric_scores"].items():
+                        deepeval_scores.setdefault(metric_name, []).append(score)
+
+        deepeval_aggregate = {
+            m: round(sum(scores) / len(scores), 4)
+            for m, scores in deepeval_scores.items()
+        }
+
         summary = RunSummary(
             run_id=run_id,
             timestamp=timestamp,
@@ -250,6 +263,7 @@ class EvalRunner:
             critical_failures=critical_failures,
             by_category=by_category,
             ragas_aggregate=ragas_aggregate,
+            deepeval_aggregate=deepeval_aggregate,
             results=results_list,
         )
 
@@ -260,5 +274,7 @@ class EvalRunner:
         console.print(f"  Avg latency: {avg_latency:.0f}ms | Critical failures: {critical_failures}")
         if ragas_aggregate:
             console.print("  RAGAS scores:", ragas_aggregate)
+        if deepeval_aggregate:
+            console.print("  DeepEval scores:", deepeval_aggregate)
 
         return summary
