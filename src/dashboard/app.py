@@ -14,12 +14,8 @@ import streamlit as st
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.charts import (
-    pass_rate_bar_chart,
-    metrics_radar_chart,
-    category_trend_chart,
-    COLORS,
-)
+from src.dashboard.components.styles import inject_css, callout, how_step, stat_card, badge
+from src.dashboard.components.charts import pass_rate_bar_chart, COLORS
 
 RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "results"))
 
@@ -31,42 +27,78 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-
-    # Inject global styles
-    st.markdown(_global_css(), unsafe_allow_html=True)
-
+    inject_css()
     render_sidebar()
 
-    # --- Hero Header ---
+    # ── Hero ──────────────────────────────────────────────────────────────────
     st.markdown(
         """
-        <div style="text-align:center; padding: 1.5rem 0 0.5rem;">
-            <h1 style="margin:0; font-size:2.5rem;">🔬 LLM Eval Lab</h1>
-            <p style="color:#a0a0b0; font-size:1.1rem; margin-top:0.3rem;">
-                Framework de evaluación de calidad para chatbots de IA
+        <div style="text-align:center; padding:2rem 0 1.25rem;">
+            <div style="font-size:3.5rem; margin-bottom:0.5rem; filter:drop-shadow(0 0 20px rgba(99,102,241,0.4));">🔬</div>
+            <h1 style="font-size:2.8rem; font-weight:900; margin:0;
+                background:linear-gradient(135deg,#6366f1,#a78bfa,#38bdf8);
+                -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
+                LLM Eval Lab
+            </h1>
+            <p style="color:#94a3b8; font-size:1.1rem; margin-top:0.5rem; font-weight:400;">
+                Framework de evaluación de calidad para chatbots de IA<br>
+                <span style="font-size:0.9rem; color:#64748b;">Aprende QA de IA de forma práctica e interactiva · RAGAS · DeepEval · LLM Judge</span>
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # --- Quick Navigation Cards ---
-    st.markdown("")
+    # ── Live Stats (si hay runs) ───────────────────────────────────────────────
+    runs = _list_recent_runs()
+    if runs:
+        latest = runs[0]
+        pr = latest.get("pass_rate", 0)
+        pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
+        s_cols = st.columns(4)
+        stats = [
+            ("Runs completados", str(len(runs)), "#6366f1", ""),
+            ("Último Pass Rate", f"{pr:.0%}", pr_color, "≥70% = bueno"),
+            ("Avg Score", f"{latest.get('avg_score', 0):.3f}", "#38bdf8", "0.0 – 1.0"),
+            ("Critical Failures", str(latest.get("critical_failures", 0)),
+             "#ef4444" if latest.get("critical_failures", 0) > 0 else "#22c55e", "objetivo: 0"),
+        ]
+        for col, (label, val, color, extra) in zip(s_cols, stats):
+            with col:
+                st.markdown(
+                    f'<div style="text-align:center;">{stat_card(label, val, color, extra=extra)}</div>',
+                    unsafe_allow_html=True,
+                )
+        st.markdown("")
+
+    # ── Navegación ────────────────────────────────────────────────────────────
+    st.markdown(
+        '<div style="font-size:1.2rem; font-weight:700; color:#e2e8f0; margin-bottom:0.75rem;">Navegar a</div>',
+        unsafe_allow_html=True,
+    )
     nav_cols = st.columns(4)
     nav_items = [
-        ("🚀", "Run Evaluation", "Lanza evaluaciones contra providers", "src/dashboard/pages/1_run.py"),
-        ("📊", "Results", "Visualiza métricas y resultados", "src/dashboard/pages/2_results.py"),
-        ("🔄", "Compare", "Compara ejecuciones side-by-side", "src/dashboard/pages/3_compare.py"),
-        ("📝", "Test Cases", "Gestiona datasets de test", "src/dashboard/pages/4_test_cases.py"),
+        ("nav-run", "🚀", "Run Evaluation",
+         "Lanza evaluaciones contra cualquier proveedor LLM. Configura datasets, evaluadores y obtén resultados al instante.",
+         "pages/1_run.py"),
+        ("nav-results", "📊", "Results Dashboard",
+         "Visualiza métricas detalladas, gráficos interactivos y analiza cada test con score y feedback explicado.",
+         "pages/2_results.py"),
+        ("nav-compare", "🔄", "Compare Runs",
+         "Compara dos ejecuciones side-by-side. Descubre qué modelo gana, en qué categorías y por cuánto.",
+         "pages/3_compare.py"),
+        ("nav-tests", "📝", "Test Cases",
+         "Explora y crea casos de prueba. Aprende qué tipos de tests evalúan los LLMs y cómo diseñarlos.",
+         "pages/4_test_cases.py"),
     ]
-    for col, (icon, title, desc, page) in zip(nav_cols, nav_items):
+    for col, (cls, icon, title, desc, page) in zip(nav_cols, nav_items):
         with col:
             st.markdown(
                 f"""
-                <div class="nav-card">
-                    <div style="font-size:2rem;">{icon}</div>
-                    <div style="font-weight:700; font-size:1.1rem; margin:0.3rem 0;">{title}</div>
-                    <div style="color:#a0a0b0; font-size:0.85rem;">{desc}</div>
+                <div class="nav-card {cls}">
+                    <span class="nav-icon">{icon}</span>
+                    <div class="nav-title">{title}</div>
+                    <div class="nav-desc">{desc}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -75,149 +107,263 @@ def main() -> None:
 
     st.divider()
 
-    # --- Dataset Overview ---
-    from src.runner.runner import load_all_datasets
+    # ── Cómo Funciona ─────────────────────────────────────────────────────────
+    st.markdown(
+        """
+        <div style="margin-bottom:0.5rem;">
+            <span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">¿Cómo funciona LLM Eval Lab?</span><br>
+            <span style="font-size:0.88rem; color:#64748b;">Evalúa la calidad de cualquier chatbot de IA en 4 pasos</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    how_col1, how_col2 = st.columns(2)
+    steps = [
+        (1, "📦 Selecciona un Dataset",
+         "Elige entre 4 categorías: Funcionales (respuestas correctas), Seguridad (ataques), Regresión (estabilidad) y Multi-turn (conversaciones)."),
+        (2, "⚙️ Configura Provider & Modo",
+         "Selecciona qué LLM evaluar: Groq (Llama 3), Gemini, Mistral u OpenRouter. Usa Mock para pruebas sin API key. Elige Plain o RAG."),
+        (3, "🧪 Elige los Evaluadores",
+         "Cada evaluador mide un aspecto distinto: Rule-Based (reglas), Safety (ataques), RAGAS (relevancia/factualidad), DeepEval (alucinaciones/sesgo)."),
+        (4, "📊 Analiza y Compara",
+         "Obtén Pass Rate, scores por categoría, latencias y métricas detalladas. Compara runs para decidir qué modelo usar en producción."),
+    ]
+    with how_col1:
+        for num, title, desc in steps[:2]:
+            st.markdown(how_step(num, title, desc), unsafe_allow_html=True)
+    with how_col2:
+        for num, title, desc in steps[2:]:
+            st.markdown(how_step(num, title, desc), unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── Conceptos Clave de QA para IA ─────────────────────────────────────────
+    st.markdown(
+        """
+        <div style="margin-bottom:0.5rem;">
+            <span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">📚 Conceptos clave de QA para IA</span><br>
+            <span style="font-size:0.88rem; color:#64748b;">Aprende los fundamentos para evaluar LLMs como un profesional</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    concepts = [
+        ("🎯", "Pass Rate",
+         "% de tests que el modelo supera. Objetivo en producción: ≥70%. Por debajo del 50% indica problemas graves de calidad.",
+         "badge-pass", "Objetivo ≥70%"),
+        ("📐", "RAGAS Metrics",
+         "Faithfulness (¿se basa en contexto real?), Answer Relevancy (¿responde lo pedido?), Context Precision. Especializado para RAG.",
+         "badge-info", "Framework RAGAS"),
+        ("🛡️", "Safety Evaluation",
+         "Detecta vulnerabilidades: prompt injection, filtración del system prompt, contenido dañino. Crítico antes de ir a producción.",
+         "badge-fail", "Tipo: Seguridad"),
+        ("🔄", "Consistency",
+         "¿El modelo responde igual ante la misma pregunta? Alta variabilidad indica inestabilidad o alucinaciones frecuentes.",
+         "badge-warn", "Métrica: Cosine Sim"),
+        ("⚖️", "LLM Judge",
+         "Usa GPT-4 como evaluador según rúbricas personalizadas. Más flexible y próximo al juicio humano que métricas automáticas.",
+         "badge-purple", "Evaluador: GPT-4"),
+        ("🔍", "DeepEval",
+         "Mide hallucination (datos inventados), bias (sesgos), toxicity (contenido dañino) y GEval (evaluación holística).",
+         "badge-gray", "Framework DeepEval"),
+    ]
+
+    c1, c2, c3 = st.columns(3)
+    for i, (icon, title, desc, badge_cls, badge_text) in enumerate(concepts):
+        col = [c1, c2, c3][i % 3]
+        with col:
+            st.markdown(
+                f"""
+                <div class="concept-card" style="margin-bottom:0.75rem;">
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                        <span style="font-size:1.4rem;">{icon}</span>
+                        <span class="concept-title">{title}</span>
+                    </div>
+                    <p class="concept-desc">{desc}</p>
+                    <span class="badge {badge_cls}" style="margin-top:0.5rem;">{badge_text}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.divider()
+
+    # ── Dataset Overview ───────────────────────────────────────────────────────
+    from src.runner.runner import load_all_datasets
     cases = load_all_datasets()
+
     categories: dict[str, int] = {}
     severities: dict[str, int] = {}
-    eval_types: dict[str, int] = {}
     for c in cases:
         categories[c.category] = categories.get(c.category, 0) + 1
         severities[c.severity] = severities.get(c.severity, 0) + 1
-        for et in c.evaluation_type:
-            eval_types[et] = eval_types.get(et, 0) + 1
 
-    st.subheader("📦 Dataset Overview")
+    st.markdown(
+        '<span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">📦 Dataset disponible</span>',
+        unsafe_allow_html=True,
+    )
 
-    overview_cols = st.columns([2, 1, 1])
-    with overview_cols[0]:
-        cat_cols = st.columns(len(categories))
-        for i, (cat, count) in enumerate(sorted(categories.items())):
-            with cat_cols[i]:
-                color = {"functional": "#6366f1", "safety": "#f87171", "regression": "#4ade80", "multi_turn": "#38bdf8"}.get(cat, "#888")
-                st.markdown(
-                    f"""
-                    <div class="stat-card">
-                        <div class="stat-label">{cat.replace('_', ' ').title()}</div>
-                        <div class="stat-value" style="color:{color};">{count}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+    cat_icons   = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
+    cat_colors  = {"functional": "#6366f1", "safety": "#ef4444", "regression": "#22c55e", "multi_turn": "#38bdf8"}
+    cat_descs   = {
+        "functional":  "Respuestas correctas a preguntas generales",
+        "safety":      "Intentos de ataque y contenido peligroso",
+        "regression":  "Estabilidad entre versiones del modelo",
+        "multi_turn":  "Conversaciones multi-turno coherentes",
+    }
 
-    with overview_cols[1]:
-        st.markdown(
-            f"""
-            <div class="stat-card">
-                <div class="stat-label">Total Test Cases</div>
-                <div class="stat-value">{len(cases)}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    ds_cols = st.columns(len(categories) + 1)
+    for i, (cat, count) in enumerate(sorted(categories.items())):
+        with ds_cols[i]:
+            color = cat_colors.get(cat, "#888")
+            icon  = cat_icons.get(cat, "📋")
+            desc  = cat_descs.get(cat, "")
+            st.markdown(
+                stat_card(cat.replace("_", " ").title(), f"{icon} {count}", color, extra=desc),
+                unsafe_allow_html=True,
+            )
+
+    with ds_cols[-1]:
+        sev_order = ["critical", "high", "medium", "low"]
+        sev_icons  = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+        sev_lines  = " · ".join(
+            f"{sev_icons[s]} {severities.get(s, 0)} {s}" for s in sev_order if s in severities
         )
-
-    with overview_cols[2]:
-        sev_display = " · ".join(f"{'🔴🟠🟡🟢'['critical high medium low'.split().index(s)]} {count}" for s, count in sorted(severities.items(), key=lambda x: ["critical", "high", "medium", "low"].index(x[0])))
         st.markdown(
-            f"""
-            <div class="stat-card">
-                <div class="stat-label">By Severity</div>
-                <div style="font-size:0.95rem; margin-top:0.3rem;">{sev_display}</div>
-            </div>
-            """,
+            stat_card("Total Test Cases", f"📊 {len(cases)}", "#a78bfa", extra=sev_lines),
             unsafe_allow_html=True,
         )
 
     st.divider()
 
-    # --- Recent Runs ---
-    st.subheader("📈 Recent Runs")
+    # ── Ejecuciones Recientes ─────────────────────────────────────────────────
+    st.markdown(
+        '<span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">📈 Ejecuciones recientes</span>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("")
 
-    runs = _list_recent_runs()
     if runs:
-        # Show latest run KPIs
         latest = runs[0]
-        st.markdown(f"**Latest:** `{latest.get('run_id', '?')}` — {latest.get('chatbot_id', '?')} ({latest.get('chatbot_mode', '?')}) — {latest.get('timestamp', '')[:19]}")
+        pr = latest.get("pass_rate", 0)
+        pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
 
-        kpi_cols = st.columns(5)
-        kpi_data = [
-            ("Pass Rate", f"{latest.get('pass_rate', 0):.1%}", _delta_color(latest.get('pass_rate', 0), 0.7)),
-            ("Avg Score", f"{latest.get('avg_score', 0):.3f}", _delta_color(latest.get('avg_score', 0), 0.7)),
-            ("Avg Latency", f"{latest.get('avg_latency_ms', 0):.0f}ms", None),
-            ("Critical Fails", str(latest.get('critical_failures', 0)), None),
-            ("Total", f"{latest.get('passed', 0)}✅ {latest.get('failed', 0)}❌", None),
-        ]
-        for col, (label, value, color) in zip(kpi_cols, kpi_data):
-            with col:
-                border = f"border-left: 3px solid {color};" if color else ""
-                st.markdown(
-                    f"""
-                    <div class="stat-card" style="{border}">
-                        <div class="stat-label">{label}</div>
-                        <div class="stat-value">{value}</div>
+        info_col, chart_col = st.columns([2, 3])
+        with info_col:
+            crit = latest.get("critical_failures", 0)
+            crit_color = "#ef4444" if crit > 0 else "#22c55e"
+            st.markdown(
+                f"""
+                <div class="card">
+                    <div style="font-size:0.7rem; color:#6366f1; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; margin-bottom:0.5rem;">Último Run</div>
+                    <div style="font-size:1rem; font-weight:700; color:#e2e8f0;">{latest.get("run_id","?")}</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">{latest.get("timestamp","")[:19]} · {latest.get("chatbot_id","?")} ({latest.get("chatbot_mode","?")})</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+                        <div>
+                            <div style="font-size:1.9rem; font-weight:800; color:{pr_color};">{pr:.0%}</div>
+                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Pass Rate</div>
+                        </div>
+                        <div>
+                            <div style="font-size:1.9rem; font-weight:800; color:#38bdf8;">{latest.get("avg_score",0):.3f}</div>
+                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Avg Score</div>
+                        </div>
+                        <div>
+                            <div style="font-size:1.4rem; font-weight:700; color:#e2e8f0;">{latest.get("avg_latency_ms",0):.0f}ms</div>
+                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Avg Latency</div>
+                        </div>
+                        <div>
+                            <div style="font-size:1.4rem; font-weight:700; color:{crit_color};">{crit}</div>
+                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Critical Fails</div>
+                        </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                        <span class="badge badge-pass">✅ {latest.get("passed",0)} passed</span>
+                        <span class="badge badge-fail">❌ {latest.get("failed",0)} failed</span>
+                        <span class="badge badge-info">📊 {latest.get("total",0)} total</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        # Quick charts for latest run
-        if len(runs) >= 1:
-            chart_col1, chart_col2 = st.columns(2)
-            with chart_col1:
-                by_cat = latest.get("by_category", {})
-                if by_cat:
-                    fig = pass_rate_bar_chart(by_cat)
-                    st.plotly_chart(fig, use_container_width=True, key="home_bar")
+        with chart_col:
+            by_cat = latest.get("by_category", {})
+            if by_cat:
+                fig = pass_rate_bar_chart(by_cat)
+                st.plotly_chart(fig, use_container_width=True, key="home_bar")
 
-            with chart_col2:
-                all_metrics = {}
-                all_metrics.update(latest.get("ragas_aggregate", {}))
-                all_metrics.update(latest.get("deepeval_aggregate", {}))
-                if all_metrics:
-                    config = st.session_state.get("config", {})
-                    thresholds = {}
-                    thresholds.update(config.get("ragas", {}).get("thresholds", {}))
-                    thresholds.update(config.get("deepeval", {}).get("thresholds", {}))
-                    fig = metrics_radar_chart(all_metrics, thresholds)
-                    st.plotly_chart(fig, use_container_width=True, key="home_radar")
-
-        # Runs history table
         if len(runs) > 1:
-            st.markdown("**Run History**")
-            runs_table = []
+            st.markdown("**Historial de runs**")
+            table = []
             for r in runs[:10]:
-                runs_table.append({
-                    "Run ID": r.get("run_id", "?"),
-                    "Provider": r.get("chatbot_id", "?"),
-                    "Mode": r.get("chatbot_mode", "?"),
-                    "Pass Rate": f"{r.get('pass_rate', 0):.1%}",
+                table.append({
+                    "Run ID":    r.get("run_id", "?"),
+                    "Provider":  r.get("chatbot_id", "?"),
+                    "Mode":      r.get("chatbot_mode", "?"),
+                    "Pass Rate": f"{r.get('pass_rate', 0):.0%}",
                     "Avg Score": f"{r.get('avg_score', 0):.3f}",
-                    "Latency": f"{r.get('avg_latency_ms', 0):.0f}ms",
-                    "Tests": r.get("total", 0),
-                    "Date": r.get("timestamp", "")[:19],
+                    "Latency":   f"{r.get('avg_latency_ms', 0):.0f}ms",
+                    "Tests":     r.get("total", 0),
+                    "Date":      r.get("timestamp", "")[:19],
                 })
-            st.dataframe(runs_table, use_container_width=True, hide_index=True)
+            st.dataframe(table, use_container_width=True, hide_index=True)
     else:
         st.markdown(
             """
-            <div style="text-align:center; padding:2rem; border:1px dashed #3d3d5c; border-radius:12px;">
-                <div style="font-size:2rem;">🚀</div>
-                <p style="color:#a0a0b0; margin-top:0.5rem;">
-                    No hay ejecuciones todavía.<br>
-                    Ve a <strong>Run Evaluation</strong> para lanzar tu primera evaluación.
-                </p>
+            <div class="empty-state">
+                <span class="empty-icon">🚀</span>
+                <div class="empty-title">¡Lanza tu primera evaluación!</div>
+                <div class="empty-desc">
+                    Todavía no hay runs. Ve a <strong>Run Evaluation</strong> para evaluar tu primer modelo.<br><br>
+                    Usa el modo <strong>Mock</strong> para empezar sin ninguna API key.
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+        st.markdown("")
+        _, cta, _ = st.columns([2, 1, 2])
+        with cta:
+            st.page_link("pages/1_run.py", label="🚀 Empezar Evaluación", use_container_width=True)
 
-    # --- Footer ---
+    # ── Quick Start Guide ─────────────────────────────────────────────────────
+    st.divider()
+    with st.expander("⚡ Guía rápida: evalúa tu primer modelo en 2 minutos"):
+        st.markdown(
+            """
+            ### 1 · Inicia la app
+            ```bash
+            streamlit run src/dashboard/app.py
+            ```
+
+            ### 2 · Sin API key: usa Mock Mode
+            En la barra lateral → **Provider → mock**. No necesitas ninguna clave.
+
+            ### 3 · Lanza la evaluación
+            Ve a **🚀 Run Evaluation**, deja todos los datasets seleccionados y pulsa **Start Evaluation**.
+
+            ### 4 · Analiza los resultados
+            Verás Pass Rate, scores por categoría y fallos detallados. ¡Ya estás haciendo QA de IA!
+
+            ---
+
+            ### Para evaluar modelos reales, configura tu `.env`:
+            ```bash
+            GROQ_API_KEY=gsk_...          # Llama 3 gratis
+            GEMINI_API_KEY=AIza...        # Gemini gratis
+            OPENAI_API_KEY=sk-...         # Necesario para RAGAS y DeepEval
+            ```
+            """
+        )
+
+    # ── Footer ────────────────────────────────────────────────────────────────
     st.divider()
     st.markdown(
         """
-        <div style="text-align:center; color:#6b7280; font-size:0.8rem; padding:0.5rem;">
-            LLM Eval Lab v0.3.0 · Built with Streamlit · RAGAS + DeepEval
+        <div style="text-align:center; color:#374151; font-size:0.76rem; padding:0.5rem;">
+            LLM Eval Lab v0.3.0 · Built with Streamlit · RAGAS + DeepEval + Plotly
         </div>
         """,
         unsafe_allow_html=True,
@@ -225,7 +371,7 @@ def main() -> None:
 
 
 def _list_recent_runs() -> list[dict]:
-    runs = []
+    runs: list[dict] = []
     if not os.path.isdir(RESULTS_DIR):
         return runs
     for run_id in sorted(os.listdir(RESULTS_DIR), reverse=True):
@@ -238,99 +384,11 @@ def _list_recent_runs() -> list[dict]:
                 runs.append(data)
             except Exception:
                 pass
-    # Also check session state
     last = st.session_state.get("last_summary")
     if last and not any(r.get("run_id") == last.get("run_id") for r in runs):
         last["_run_id"] = last.get("run_id", "latest")
         runs.insert(0, last)
     return runs
-
-
-def _delta_color(value: float, threshold: float) -> str:
-    if value >= threshold:
-        return COLORS["success"]
-    if value >= threshold * 0.8:
-        return COLORS["warning"]
-    return COLORS["danger"]
-
-
-def _global_css() -> str:
-    return """
-    <style>
-    /* Navigation cards */
-    .nav-card {
-        background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
-        border-radius: 12px;
-        padding: 1.2rem;
-        border: 1px solid #3d3d5c;
-        text-align: center;
-        transition: transform 0.2s, box-shadow 0.2s;
-        min-height: 120px;
-    }
-    .nav-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
-        border-color: #6366f1;
-    }
-
-    /* Stat cards */
-    .stat-card {
-        background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
-        border-radius: 10px;
-        padding: 1rem;
-        border: 1px solid #3d3d5c;
-    }
-    .stat-label {
-        font-size: 0.8rem;
-        color: #a0a0b0;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .stat-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #e0e0e0;
-        margin-top: 0.2rem;
-    }
-
-    /* Badge styles */
-    .pass-badge {
-        background: #166534; color: #4ade80;
-        padding: 2px 10px; border-radius: 6px; font-weight: 600; font-size: 0.8rem;
-    }
-    .fail-badge {
-        background: #7f1d1d; color: #f87171;
-        padding: 2px 10px; border-radius: 6px; font-weight: 600; font-size: 0.8rem;
-    }
-
-    /* Tabs styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px;
-        padding: 8px 16px;
-    }
-
-    /* Sidebar tweaks */
-    div[data-testid="stSidebar"] {
-        min-width: 290px;
-    }
-    div[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        font-size: 0.9rem;
-    }
-
-    /* Expander headers */
-    .streamlit-expanderHeader {
-        font-size: 0.95rem !important;
-    }
-
-    /* Dataframe */
-    .stDataFrame {
-        border-radius: 8px;
-    }
-    </style>
-    """
 
 
 if __name__ == "__main__":
