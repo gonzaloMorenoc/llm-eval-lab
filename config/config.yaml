@@ -1,0 +1,67 @@
+providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    model: "llama-3.3-70b-versatile"
+    api_key_env: "GROQ_API_KEY"
+    free_limits: "14,400 req/day | 70,000 tokens/min"
+    notes: "Fastest. Ideal for massive test runs."
+
+  gemini:
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    model: "gemini-2.0-flash"
+    api_key_env: "GEMINI_API_KEY"
+    free_limits: "~1M tokens/min (tier 1)"
+    notes: "Highest volume. Context up to 1M tokens."
+
+  mistral:
+    base_url: "https://api.mistral.ai/v1"
+    model: "mistral-small-latest"
+    api_key_env: "MISTRAL_API_KEY"
+    free_limits: "~1B tokens/month (free tier)"
+    notes: "Sustained for prolonged use. European model."
+
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    model: "meta-llama/llama-3.1-8b-instruct:free"
+    api_key_env: "OPENROUTER_API_KEY"
+    free_limits: "50 req/day (free tier)"
+    notes: "One API key gives access to many free models."
+
+active_provider: "groq"
+
+runner:
+  max_concurrent: 5
+  retry_attempts: 3
+  retry_backoff_base: 2
+  timeout_ms: 30000
+
+ragas:
+  evaluator_llm: "gpt-4o-mini"
+  embeddings_model: "text-embedding-3-small"
+  default_metrics_plain:
+    - "answer_relevancy"
+    - "factual_correctness"
+  default_metrics_rag:
+    - "answer_relevancy"
+    - "factual_correctness"
+    - "faithfulness"
+    - "context_precision"
+  thresholds:
+    answer_relevancy: 0.7
+    factual_correctness: 0.6
+    faithfulness: 0.75
+    context_precision: 0.65
+    context_recall: 0.65
+    bleu_score: 0.3
+    rouge_score: 0.4
+  pass_threshold: 0.65
+
+rag:
+  context_template: |
+    Use the following context to answer the user's question.
+    If the context doesn't contain relevant information, say so.
+
+    Context:
+    {context}
+  top_k: 3
+  collection_name: "demo_knowledge_base"
