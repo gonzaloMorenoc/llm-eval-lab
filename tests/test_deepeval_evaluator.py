@@ -1,15 +1,21 @@
 """Tests for DeepEval evaluator (mock-based, no API keys needed).
 
 These tests verify the evaluator's logic without calling the DeepEval API.
+The OPENAI_API_KEY env var is patched to satisfy the validation check.
 """
 
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.evaluators.deepeval_evaluator import DeepEvalEvaluator
-from src.runner.models import EvaluationResult, TestCase
+from src.runner.models import TestCase
+
+
+@pytest.fixture(autouse=True)
+def _mock_openai_key(monkeypatch):
+    """Provide a fake OPENAI_API_KEY so DeepEvalEvaluator can be instantiated."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-for-unit-tests")
 
 
 @pytest.fixture
@@ -46,6 +52,12 @@ class TestDeepEvalEvaluatorLogic:
     def test_name(self):
         evaluator = DeepEvalEvaluator()
         assert evaluator.name() == "deepeval"
+
+    def test_missing_api_key_raises_error(self, monkeypatch):
+        """Verify that missing OPENAI_API_KEY raises a clear error."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+            DeepEvalEvaluator()
 
     def test_resolve_metrics_plain_mode(self):
         evaluator = DeepEvalEvaluator()

@@ -6,20 +6,15 @@ import os
 import sys
 
 import streamlit as st
-import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
-def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
-
-
 def render_sidebar() -> dict:
     """Render the sidebar and return the current configuration state."""
-    config = _load_config()
+    from src.dashboard.components.shared import load_config
+
+    config = load_config()
     providers = list(config.get("providers", {}).keys())
 
     with st.sidebar:

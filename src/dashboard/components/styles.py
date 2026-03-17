@@ -299,6 +299,81 @@ div[data-testid="stProgressBar"] > div > div {
     background: linear-gradient(90deg, #6366f1, #8b5cf6) !important;
     border-radius: 4px !important;
 }
+
+/* Disabled buttons */
+.stButton > button:disabled {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Loading spinner overlay */
+.loading-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
+}
+
+/* === ACCESSIBILITY ============================================= */
+
+/* Badges: add text-decoration underline for fail badges (colorblind) */
+.badge-fail { text-decoration: underline; text-decoration-style: wavy; text-underline-offset: 2px; }
+.pass-badge { text-decoration: none; }
+.fail-badge { text-decoration: underline; text-decoration-style: wavy; text-underline-offset: 2px; }
+
+/* Focus indicators for keyboard navigation */
+.stButton > button:focus-visible,
+div[data-baseweb="select"]:focus-within,
+.stCheckbox:focus-within {
+    outline: 2px solid #6366f1 !important;
+    outline-offset: 2px !important;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .card, .nav-card, .concept-card, .dataset-card, .stButton > button {
+        transition: none !important;
+    }
+    .nav-card:hover, .card-hover:hover { transform: none !important; }
+}
+
+/* === RESPONSIVE ================================================ */
+
+/* Tablet and below */
+@media (max-width: 768px) {
+    .nav-card { min-height: auto; padding: 1rem 0.75rem; }
+    .nav-icon { font-size: 1.8rem; }
+    .nav-title { font-size: 0.88rem; }
+    .nav-desc { font-size: 0.72rem; }
+    .stat-value { font-size: 1.5rem; }
+    .stat-label { font-size: 0.65rem; }
+    .page-title { font-size: 1.4rem; }
+    .page-desc { font-size: 0.82rem; }
+    .wizard-bar { padding: 0.6rem 0.75rem; flex-wrap: wrap; gap: 0.3rem; }
+    .wz-label { font-size: 0.7rem; }
+    .wz-line { min-width: 15px; max-width: 30px; }
+    .concept-card { padding: 0.8rem; }
+    .how-step { padding: 0.9rem; gap: 0.6rem; }
+    .callout { padding: 0.7rem 0.9rem; font-size: 0.8rem; }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .nav-card { min-height: auto; padding: 0.75rem; }
+    .nav-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+    .nav-desc { display: none; }
+    .stat-value { font-size: 1.25rem; }
+    .page-title { font-size: 1.2rem; }
+    .wizard-bar { flex-direction: column; align-items: stretch; }
+    .wz-line { height: 0; width: 0; margin: 0; }
+    .wz-step { justify-content: flex-start; padding: 0.15rem 0; }
+}
 </style>
 """
 

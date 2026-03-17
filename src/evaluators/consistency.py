@@ -1,4 +1,30 @@
-"""Consistency evaluator — measures response stability across multiple runs."""
+"""Consistency evaluator — measures response stability across multiple runs.
+
+A good chatbot should give similar answers to the same question. This evaluator
+measures that stability using string similarity.
+
+Algorithm:
+  Uses Python's SequenceMatcher (Ratcliff/Obershelp algorithm) to compute
+  similarity between pairs of responses. The algorithm finds the longest
+  common subsequence and returns a ratio from 0.0 (completely different)
+  to 1.0 (identical).
+
+  Complexity: O(n²) where n is the length of the strings. For typical chatbot
+  responses (<2000 chars), this is fast enough. For very long responses,
+  consider switching to cosine similarity on TF-IDF vectors or embeddings.
+
+Two modes:
+  1. **Multi-response**: If the test case provides multiple prior responses
+     (via metadata.consistency_responses), computes pairwise similarity
+     across ALL responses including the current one.
+  2. **Single vs reference**: If only one response and a reference answer
+     are available, computes similarity between the response and the
+     reference. Useful for regression testing.
+
+The similarity threshold (default 0.6) is configurable in config.yaml.
+A threshold of 0.6 is lenient — it allows paraphrasing while catching
+completely different answers.
+"""
 
 from __future__ import annotations
 

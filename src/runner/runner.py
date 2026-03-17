@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import traceback
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
 from src.chatbots.base import BaseChatbot
 from src.evaluators.base import BaseEvaluator
@@ -23,6 +25,7 @@ from src.runner.models import (
 )
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def _load_config() -> dict:
@@ -32,15 +35,23 @@ def _load_config() -> dict:
 
 
 def load_dataset(path: str) -> list[TestCase]:
-    """Load test cases from a JSONL file."""
+    """Load test cases from a JSONL file, with line-number tracking for error messages."""
     cases = []
     with open(path) as f:
-        for line in f:
+        for line_num, line in enumerate(f, start=1):
             line = line.strip()
             if not line:
                 continue
-            data = json.loads(line)
-            cases.append(TestCase(**data))
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Malformed JSON in {path} at line {line_num}: {e}") from e
+            try:
+                cases.append(TestCase(**data))
+            except Exception as e:
+                raise ValueError(
+                    f"Invalid test case in {path} at line {line_num}: {e}"
+                ) from e
     return cases
 
 
@@ -86,13 +97,20 @@ class EvalRunner:
                 response = await self._chatbot.complete(messages)
                 return response.content, response.retrieved_contexts, response.latency_ms, None
             except Exception as e:
-                last_error = str(e)
-                is_rate_limit = "429" in str(e) or "rate" in str(e).lower()
-                is_network = "timeout" in str(e).lower() or "connect" in str(e).lower()
+                # Preserve full error context including exception type and traceback
+                last_error = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+                error_str = str(e).lower()
+                is_rate_limit = "429" in str(e) or "rate" in error_str
+                is_network = "timeout" in error_str or "connect" in error_str
                 if is_rate_limit or is_network:
                     wait = self._retry_backoff_base ** attempt
+                    logger.info(
+                        "Retryable error (attempt %d/%d), waiting %ds: %s",
+                        attempt + 1, self._retry_attempts, wait, type(e).__name__,
+                    )
                     await asyncio.sleep(wait)
                 else:
+                    logger.error("Non-retryable chatbot error: %s", last_error)
                     break
         return "", None, 0.0, last_error
 
@@ -139,12 +157,13 @@ class EvalRunner:
                     )
                     evaluations.append(eval_result)
                 except Exception as e:
+                    logger.error("Evaluator '%s' crashed: %s: %s", eval_type, type(e).__name__, e)
                     evaluations.append(EvaluationResult(
                         evaluator=eval_type,
                         passed=False,
                         score=None,
-                        reason=f"Evaluator error: {e}",
-                        details={"error": str(e)},
+                        reason=f"Evaluator error: {type(e).__name__}: {e}",
+                        details={"error": str(e), "error_type": type(e).__name__},
                     ))
 
             result.evaluations = evaluations
@@ -158,7 +177,7 @@ class EvalRunner:
     async def run(self, test_cases: list[TestCase]) -> RunSummary:
         """Run all test cases and return a summary."""
         run_id = str(uuid.uuid4())[:8]
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         mode = "rag" if self._chatbot.is_rag else "plain"
 
         console.print(

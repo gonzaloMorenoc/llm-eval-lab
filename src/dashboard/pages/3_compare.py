@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -12,49 +11,23 @@ import plotly.graph_objects as go
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, badge, stat_card
+from src.dashboard.components.styles import inject_css, callout, badge, stat_card, page_header
 from src.dashboard.components.metrics import severity_icon
 from src.dashboard.components.charts import comparison_bar_chart, COLORS, CATEGORY_COLORS
+from src.dashboard.components.shared import list_runs
 
 st.set_page_config(page_title="Compare Runs — LLM Eval Lab", page_icon="🔄", layout="wide")
 inject_css()
 render_sidebar()
 
-RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "results"))
-
-
-def _list_runs() -> list[dict]:
-    runs: list[dict] = []
-    if os.path.isdir(RESULTS_DIR):
-        for run_id in sorted(os.listdir(RESULTS_DIR), reverse=True):
-            json_path = os.path.join(RESULTS_DIR, run_id, "report.json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path) as f:
-                        data = json.load(f)
-                    data["_run_id"] = run_id
-                    runs.append(data)
-                except Exception:
-                    pass
-    last = st.session_state.get("last_summary")
-    if last and not any(r.get("run_id") == last.get("run_id") for r in runs):
-        last["_run_id"] = last.get("run_id", "latest")
-        runs.insert(0, last)
-    return runs
-
 
 # ── Page header ───────────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div class="page-header">
-        <div class="page-title">🔄 Compare Runs</div>
-        <div class="page-desc">Comparación side-by-side de dos evaluaciones — descubre qué modelo rinde mejor y en qué categorías</div>
-    </div>
-    """,
+    page_header("🔄", "Compare Runs", "Comparación side-by-side de dos evaluaciones — descubre qué modelo rinde mejor y en qué categorías"),
     unsafe_allow_html=True,
 )
 
-runs = _list_runs()
+runs = list_runs()
 
 if len(runs) < 2:
     st.markdown(
