@@ -1,30 +1,65 @@
-"""RAGAS evaluator wrapper — encapsulates all RAGAS metrics behind BaseEvaluator."""
+"""RAGAS evaluator — measures retrieval and generation quality with research-backed metrics.
+
+RAGAS (Retrieval-Augmented Generation Assessment) is an open-source framework
+that provides metrics specifically designed for evaluating RAG pipelines. Each
+metric targets a different quality dimension:
+
+  - **AnswerRelevancy**: Does the response actually address the question?
+    Uses an LLM to generate questions from the answer and measures semantic
+    similarity to the original question. High score = focused answer.
+
+  - **FactualCorrectness**: Does the response match a known reference answer?
+    Compares claims in the response against a gold-standard reference.
+    Requires a `reference` field in the test case.
+
+  - **Faithfulness**: Is the response grounded in the retrieved context?
+    Extracts claims from the response and checks each one is supported by
+    the provided context. RAG-only — prevents hallucination.
+
+  - **ContextPrecision**: Are the retrieved documents actually relevant?
+    Measures whether top-ranked documents are more useful than lower ones.
+    RAG-only — evaluates retrieval quality, not generation.
+
+  - **BleuScore / RougeScore**: Token-overlap metrics (non-LLM).
+    Fast and cheap but shallow — useful as baselines. Require `reference`.
+
+Why RAGAS instead of manual evaluation?
+  Manual evaluation doesn't scale. RAGAS automates the process using an
+  evaluator LLM (gpt-4o-mini) to assess the chatbot's responses, giving
+  consistent and reproducible quality scores.
+
+Configuration:
+  All thresholds and default metrics are defined in config.yaml under the
+  `ragas` section. The evaluator LLM requires OPENAI_API_KEY.
+"""
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import yaml
-from openai import AsyncOpenAI
+
+# LangChain wrappers for RAGAS
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+# RAGAS imports
+from ragas import SingleTurnSample
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics import (
+    AnswerRelevancy,
+    BleuScore,
+    FactualCorrectness,
+    Faithfulness,
+    RougeScore,
+)
 
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
 
-# RAGAS imports
-from ragas import SingleTurnSample
-from ragas.metrics import (
-    AnswerRelevancy,
-    Faithfulness,
-    FactualCorrectness,
-    BleuScore,
-    RougeScore,
-)
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
-
-# LangChain wrappers for RAGAS
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+logger = logging.getLogger(__name__)
 
 
 def _load_config() -> dict:
@@ -59,6 +94,12 @@ class RagasEvaluator(BaseEvaluator):
         evaluator_model = ragas_cfg.get("evaluator_llm", "gpt-4o-mini")
         embeddings_model = ragas_cfg.get("embeddings_model", "text-embedding-3-small")
         openai_key = os.getenv("OPENAI_API_KEY", "")
+
+        if not openai_key:
+            raise ValueError(
+                "OPENAI_API_KEY environment variable is required for RAGAS evaluation. "
+                "RAGAS uses an LLM (gpt-4o-mini by default) to compute semantic metrics."
+            )
 
         self._llm = LangchainLLMWrapper(ChatOpenAI(model=evaluator_model, api_key=openai_key))
         self._embeddings = LangchainEmbeddingsWrapper(
@@ -189,7 +230,8 @@ class RagasEvaluator(BaseEvaluator):
                 score = await metric.single_turn_ascore(sample)
                 metric_scores[metric_name] = float(score)
             except Exception as e:
-                errors[metric_name] = str(e)
+                logger.warning("RAGAS metric '%s' failed: %s: %s", metric_name, type(e).__name__, e)
+                errors[metric_name] = f"{type(e).__name__}: {e}"
 
         # Calculate aggregate score and pass/fail
         if metric_scores:

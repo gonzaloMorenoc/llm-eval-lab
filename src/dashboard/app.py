@@ -5,7 +5,6 @@ Launch: streamlit run src/dashboard/app.py
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -16,8 +15,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import inject_css, callout, how_step, stat_card, badge
 from src.dashboard.components.charts import pass_rate_bar_chart, COLORS
-
-RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "results"))
+from src.dashboard.components.shared import (
+    list_runs,
+    pass_rate_color,
+    CATEGORY_ICONS,
+    CATEGORY_LABEL_COLORS,
+    CATEGORY_DESCRIPTIONS,
+    SEVERITY_ICONS,
+    SEVERITY_ORDER,
+)
 
 
 def main() -> None:
@@ -50,11 +56,11 @@ def main() -> None:
     )
 
     # ── Live Stats (si hay runs) ───────────────────────────────────────────────
-    runs = _list_recent_runs()
+    runs = list_runs()
     if runs:
         latest = runs[0]
         pr = latest.get("pass_rate", 0)
-        pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
+        pr_color = pass_rate_color(pr)
         s_cols = st.columns(4)
         stats = [
             ("Runs completados", str(len(runs)), "#6366f1", ""),
@@ -205,14 +211,9 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    cat_icons   = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
-    cat_colors  = {"functional": "#6366f1", "safety": "#ef4444", "regression": "#22c55e", "multi_turn": "#38bdf8"}
-    cat_descs   = {
-        "functional":  "Respuestas correctas a preguntas generales",
-        "safety":      "Intentos de ataque y contenido peligroso",
-        "regression":  "Estabilidad entre versiones del modelo",
-        "multi_turn":  "Conversaciones multi-turno coherentes",
-    }
+    cat_icons = CATEGORY_ICONS
+    cat_colors = CATEGORY_LABEL_COLORS
+    cat_descs = CATEGORY_DESCRIPTIONS
 
     ds_cols = st.columns(len(categories) + 1)
     for i, (cat, count) in enumerate(sorted(categories.items())):
@@ -226,10 +227,8 @@ def main() -> None:
             )
 
     with ds_cols[-1]:
-        sev_order = ["critical", "high", "medium", "low"]
-        sev_icons  = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
         sev_lines  = " · ".join(
-            f"{sev_icons[s]} {severities.get(s, 0)} {s}" for s in sev_order if s in severities
+            f"{SEVERITY_ICONS[s]} {severities.get(s, 0)} {s}" for s in SEVERITY_ORDER if s in severities
         )
         st.markdown(
             stat_card("Total Test Cases", f"📊 {len(cases)}", "#a78bfa", extra=sev_lines),
@@ -248,7 +247,7 @@ def main() -> None:
     if runs:
         latest = runs[0]
         pr = latest.get("pass_rate", 0)
-        pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
+        pr_color = pass_rate_color(pr)
 
         info_col, chart_col = st.columns([2, 3])
         with info_col:
@@ -368,27 +367,6 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
-
-
-def _list_recent_runs() -> list[dict]:
-    runs: list[dict] = []
-    if not os.path.isdir(RESULTS_DIR):
-        return runs
-    for run_id in sorted(os.listdir(RESULTS_DIR), reverse=True):
-        json_path = os.path.join(RESULTS_DIR, run_id, "report.json")
-        if os.path.exists(json_path):
-            try:
-                with open(json_path) as f:
-                    data = json.load(f)
-                data["_run_id"] = run_id
-                runs.append(data)
-            except Exception:
-                pass
-    last = st.session_state.get("last_summary")
-    if last and not any(r.get("run_id") == last.get("run_id") for r in runs):
-        last["_run_id"] = last.get("run_id", "latest")
-        runs.insert(0, last)
-    return runs
 
 
 if __name__ == "__main__":

@@ -42,25 +42,23 @@ def kpi_row(metrics: list[tuple[str, str, str | None]]) -> None:
 
 
 def pass_fail_badge(passed: bool) -> str:
-    """Return HTML for a pass/fail badge."""
+    """Return HTML for a pass/fail badge with accessible text."""
     if passed:
-        return '<span class="pass-badge">PASS</span>'
-    return '<span class="fail-badge">FAIL</span>'
+        return '<span class="pass-badge" role="status" aria-label="Test passed">✓ PASS</span>'
+    return '<span class="fail-badge" role="status" aria-label="Test failed">✗ FAIL</span>'
 
 
 def severity_icon(severity: str) -> str:
     """Return an emoji icon for severity level."""
-    icons = {
-        "critical": "🔴",
-        "high": "🟠",
-        "medium": "🟡",
-        "low": "🟢",
-    }
-    return icons.get(severity, "⚪")
+    from src.dashboard.components.shared import SEVERITY_ICONS
+
+    return SEVERITY_ICONS.get(severity, "⚪")
 
 
 def severity_badge(severity: str) -> str:
-    """Return colored HTML badge for severity."""
+    """Return colored HTML badge for severity with icon for accessibility."""
+    from src.dashboard.components.shared import SEVERITY_ICONS
+
     colors = {
         "critical": ("background:#7f1d1d; color:#fca5a5;", "CRITICAL"),
         "high": ("background:#7c2d12; color:#fdba74;", "HIGH"),
@@ -68,7 +66,11 @@ def severity_badge(severity: str) -> str:
         "low": ("background:#14532d; color:#86efac;", "LOW"),
     }
     style, text = colors.get(severity, ("background:#374151; color:#9ca3af;", severity.upper()))
-    return f'<span style="{style} padding:2px 8px; border-radius:4px; font-weight:600; font-size:0.75rem;">{text}</span>'
+    icon = SEVERITY_ICONS.get(severity, "⚪")
+    return (
+        f'<span style="{style} padding:2px 8px; border-radius:4px; font-weight:600; font-size:0.75rem;"'
+        f' role="status" aria-label="Severity: {severity}">{icon} {text}</span>'
+    )
 
 
 def score_color(score: float | None, threshold: float = 0.65) -> str:

@@ -12,9 +12,16 @@ import streamlit as st
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, badge, wizard_bar, stat_card
+from src.dashboard.components.styles import inject_css, callout, badge, wizard_bar, stat_card, page_header
 from src.dashboard.components.metrics import severity_icon, kpi_row, score_bar
 from src.dashboard.components.charts import COLORS
+from src.dashboard.components.shared import (
+    CATEGORY_ICONS,
+    CATEGORY_LABEL_COLORS,
+    SEVERITY_ICONS,
+    SEVERITY_ORDER,
+    pass_rate_color,
+)
 
 st.set_page_config(page_title="Run Evaluation — LLM Eval Lab", page_icon="🚀", layout="wide")
 inject_css()
@@ -22,12 +29,7 @@ render_sidebar()
 
 # ── Page header ───────────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div class="page-header">
-        <div class="page-title">🚀 Run Evaluation</div>
-        <div class="page-desc">Evalúa un modelo LLM contra tu dataset de tests en tres pasos</div>
-    </div>
-    """,
+    page_header("🚀", "Run Evaluation", "Evalúa un modelo LLM contra tu dataset de tests en tres pasos"),
     unsafe_allow_html=True,
 )
 
@@ -64,8 +66,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-cat_icons = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
-cat_colors = {"functional": "#6366f1", "safety": "#ef4444", "regression": "#22c55e", "multi_turn": "#38bdf8"}
+cat_icons = CATEGORY_ICONS
+cat_colors = CATEGORY_LABEL_COLORS
 cat_descs = {
     "functional":  "Evalúa si el modelo responde correctamente a preguntas generales, de dominio y de razonamiento.",
     "safety":      "Detecta vulnerabilidades: prompt injection, filtración del system prompt y contenido dañino.",
@@ -86,8 +88,7 @@ for i, (name, cases) in enumerate(available_datasets.items()):
         sevs: dict[str, int] = {}
         for c in cases:
             sevs[c.severity] = sevs.get(c.severity, 0) + 1
-        sev_icons = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
-        sev_str = " · ".join(f"{sev_icons.get(s, '')} {n}" for s, n in sorted(sevs.items()))
+        sev_str = " · ".join(f"{SEVERITY_ICONS.get(s, '')} {n}" for s, n in sorted(sevs.items()))
 
         checked = st.checkbox(
             f"{icon} **{name.replace('_', ' ').title()}**",
@@ -368,7 +369,7 @@ if run_clicked:
 
     # ── Results ───────────────────────────────────────────────────────────────
     pr = summary.pass_rate
-    pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
+    pr_color = pass_rate_color(pr)
     pr_msg = "¡Excelente!" if pr >= 0.7 else ("Mejorable" if pr >= 0.5 else "Necesita atención")
 
     st.markdown(
@@ -448,8 +449,7 @@ if run_clicked:
                 unsafe_allow_html=True,
             )
         else:
-            sev_order = ["critical", "high", "medium", "low"]
-            sorted_failures = sorted(failures, key=lambda x: sev_order.index(x.test_case.severity))
+            sorted_failures = sorted(failures, key=lambda x: SEVERITY_ORDER.index(x.test_case.severity))
 
             st.markdown(f"**{len(failures)} tests fallidos** (ordenados por severidad):")
             for r in sorted_failures:

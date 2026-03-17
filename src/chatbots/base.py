@@ -1,4 +1,26 @@
-"""Abstract base classes for chatbot adapters."""
+"""Abstract base classes for chatbot adapters.
+
+The chatbot layer defines a common interface for interacting with any LLM,
+regardless of provider or mode (plain vs RAG). This decoupling is key:
+
+  - **BaseChatbot**: Plain LLM interaction. Takes messages, returns a response.
+    The `is_rag` property returns False, and `retrieved_contexts` is always None.
+
+  - **BaseRAGChatbot**: Extends BaseChatbot with a `retrieve()` step before
+    generation. The `complete()` method must (1) retrieve relevant documents,
+    (2) inject them into the prompt, and (3) return them in `retrieved_contexts`
+    so RAG-specific evaluators (Faithfulness, ContextPrecision) can assess
+    retrieval quality.
+
+  - **ChatbotResponse**: Standardized output containing the response text,
+    provider/model metadata, latency in milliseconds, and optionally the
+    retrieved contexts.
+
+Why this abstraction?
+  The EvalRunner doesn't care which provider or mode is used. It calls
+  `chatbot.complete(messages)` and gets a ChatbotResponse. This lets us
+  swap providers via config without touching evaluation logic.
+"""
 
 from abc import ABC, abstractmethod
 

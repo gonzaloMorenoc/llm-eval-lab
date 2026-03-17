@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -11,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, badge, stat_card
+from src.dashboard.components.styles import inject_css, callout, badge, stat_card, page_header
 from src.dashboard.components.metrics import severity_icon, kpi_row, severity_badge, score_bar
 from src.dashboard.components.charts import (
     COLORS,
@@ -22,46 +21,20 @@ from src.dashboard.components.charts import (
     evaluator_scores_chart,
     score_distribution_chart,
 )
+from src.dashboard.components.shared import list_runs
 
 st.set_page_config(page_title="Results — LLM Eval Lab", page_icon="📊", layout="wide")
 inject_css()
 render_sidebar()
 
-RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "results"))
-
-
-def _list_runs() -> list[dict]:
-    runs: list[dict] = []
-    if os.path.isdir(RESULTS_DIR):
-        for run_id in sorted(os.listdir(RESULTS_DIR), reverse=True):
-            json_path = os.path.join(RESULTS_DIR, run_id, "report.json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path) as f:
-                        data = json.load(f)
-                    data["_run_id"] = run_id
-                    runs.append(data)
-                except Exception:
-                    pass
-    last = st.session_state.get("last_summary")
-    if last and not any(r.get("run_id") == last.get("run_id") for r in runs):
-        last["_run_id"] = last.get("run_id", "latest")
-        runs.insert(0, last)
-    return runs
-
 
 # ── Page header ───────────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div class="page-header">
-        <div class="page-title">📊 Results Dashboard</div>
-        <div class="page-desc">Análisis detallado de una ejecución de evaluación — métricas, gráficos y resultados por test</div>
-    </div>
-    """,
+    page_header("📊", "Results Dashboard", "Análisis detallado de una ejecución de evaluación — métricas, gráficos y resultados por test"),
     unsafe_allow_html=True,
 )
 
-runs = _list_runs()
+runs = list_runs()
 
 if not runs:
     st.markdown(

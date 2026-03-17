@@ -1,7 +1,19 @@
-"""Generic adapter for all OpenAI-compatible providers."""
+"""Generic adapter for all OpenAI-compatible providers.
+
+This adapter implements a single interface that works with any LLM provider
+exposing an OpenAI-compatible API (e.g., Groq, Gemini, Mistral, OpenRouter).
+Instead of writing a separate adapter per provider, all providers share this
+class and differ only in configuration (base_url, model, api_key_env).
+
+Why OpenAI-compatible?
+  Most LLM providers adopted the OpenAI chat-completions format as a de-facto
+  standard. By targeting this interface, we can swap providers via config.yaml
+  without changing any code.
+"""
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 
@@ -9,6 +21,8 @@ import yaml
 from openai import AsyncOpenAI
 
 from src.chatbots.base import BaseChatbot, ChatbotResponse
+
+logger = logging.getLogger(__name__)
 
 
 def load_config() -> dict:
@@ -36,6 +50,12 @@ class OpenAICompatibleChatbot(BaseChatbot):
         self._base_url = base_url or provider_cfg["base_url"]
 
         resolved_key = api_key or os.getenv(provider_cfg["api_key_env"], "")
+        if not resolved_key:
+            raise ValueError(
+                f"API key for provider '{provider_name}' is missing. "
+                f"Set the environment variable {provider_cfg['api_key_env']} or pass api_key directly."
+            )
+
         self._client = AsyncOpenAI(
             base_url=self._base_url,
             api_key=resolved_key,
@@ -43,12 +63,23 @@ class OpenAICompatibleChatbot(BaseChatbot):
 
     async def complete(self, messages: list[dict], **kwargs) -> ChatbotResponse:
         start = time.perf_counter()
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            **kwargs,
-        )
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                **kwargs,
+            )
+        except Exception as e:
+            logger.error("API call failed for %s/%s: %s", self._provider, self._model, e)
+            raise RuntimeError(
+                f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}"
+            ) from e
+
         latency = (time.perf_counter() - start) * 1000
+
+        if not response.choices:
+            raise RuntimeError(f"API returned empty choices for {self._provider}/{self._model}")
+
         content = response.choices[0].message.content or ""
         return ChatbotResponse(
             content=content,

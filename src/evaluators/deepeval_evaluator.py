@@ -1,7 +1,39 @@
-"""DeepEval evaluator — complements RAGAS with hallucination, bias, and toxicity metrics."""
+"""DeepEval evaluator — complements RAGAS with hallucination, bias, and toxicity metrics.
+
+DeepEval is an open-source LLM evaluation framework that provides metrics for
+dimensions not fully covered by RAGAS:
+
+  - **Hallucination**: Does the response contain claims not supported by the
+    retrieved context? Uses an LLM to extract and verify each factual claim.
+    RAG-only — only meaningful when context is available.
+
+  - **Bias**: Does the response exhibit gender, racial, or other biases?
+    Uses an LLM to detect biased opinions presented as facts.
+
+  - **Toxicity**: Does the response contain toxic, offensive, or harmful
+    language? Checks for insults, threats, profanity, etc.
+
+  - **AnswerRelevancy**: Similar to RAGAS but with DeepEval's implementation.
+    Checks whether the response is pertinent to the input question.
+
+  - **Faithfulness**: Are all claims in the response traceable back to the
+    provided context? RAG-only. Complements the hallucination check.
+
+  - **GEval**: A general-purpose LLM evaluation using custom criteria.
+    Here configured for "Correctness" — factual accuracy and completeness.
+
+Why both RAGAS and DeepEval?
+  They use different methodologies. Running both gives a more robust signal:
+  if RAGAS says "good" but DeepEval flags hallucination, it's worth investigating.
+
+Configuration:
+  Defined in config.yaml under the `deepeval` section.
+  Requires OPENAI_API_KEY for the evaluator LLM (gpt-4o-mini by default).
+"""
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
@@ -9,6 +41,8 @@ import yaml
 
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
+
+logger = logging.getLogger(__name__)
 
 
 def _load_config() -> dict:
@@ -40,6 +74,13 @@ class DeepEvalEvaluator(BaseEvaluator):
             "default_metrics_rag", ["answer_relevancy", "hallucination", "bias", "toxicity"]
         )
         self._model = deepeval_cfg.get("evaluator_model", "gpt-4o-mini")
+
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+        if not openai_key:
+            raise ValueError(
+                "OPENAI_API_KEY environment variable is required for DeepEval evaluation. "
+                "DeepEval uses an LLM (gpt-4o-mini by default) to compute its metrics."
+            )
 
     def name(self) -> str:
         return "deepeval"
@@ -165,7 +206,8 @@ class DeepEvalEvaluator(BaseEvaluator):
                 metric_scores[metric_name] = score
                 metric_passed[metric_name] = metric.is_successful()
             except Exception as e:
-                errors[metric_name] = str(e)
+                logger.warning("DeepEval metric '%s' failed: %s: %s", metric_name, type(e).__name__, e)
+                errors[metric_name] = f"{type(e).__name__}: {e}"
 
         # Calculate aggregate
         if metric_scores:

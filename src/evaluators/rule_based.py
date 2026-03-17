@@ -1,4 +1,29 @@
-"""Deterministic rule-based evaluator with composable checks."""
+"""Deterministic rule-based evaluator with composable checks.
+
+This is the simplest evaluator: no LLM calls, no API keys, no cost. It runs
+fast, deterministic checks that any chatbot response should pass:
+
+  1. **Non-empty**: Response must contain actual content.
+  2. **Minimum length**: At least 10 characters (catches empty/truncated responses).
+  3. **Key-term relevance**: Extracts meaningful words from expected_behavior
+     and checks if the response mentions at least one. This is a shallow
+     relevance check — it catches completely off-topic responses but won't
+     catch subtle misunderstandings (that's what RAGAS is for).
+  4. **Refusal detection**: If the test expects a refusal (e.g., safety tests),
+     checks that the response doesn't show compliance indicators.
+  5. **Latency**: Response must arrive within 30 seconds.
+
+Why composable check functions?
+  Each check is a standalone function returning (passed, reason). This makes
+  them independently testable and reusable. The evaluator composes them into
+  a single verdict by requiring ALL checks to pass.
+
+Limitations:
+  - Keyword matching is shallow — 'python' in response doesn't mean the
+    explanation is correct.
+  - Refusal detection uses a fixed list of English phrases.
+  - The 10-char minimum is arbitrary; adjust in config for your use case.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +31,6 @@ import re
 
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
-
 
 # --- Composable check functions ---
 
@@ -100,9 +124,9 @@ class RuleBasedEvaluator(BaseEvaluator):
             if key_terms:
                 found_any = any(term in response.lower() for term in key_terms)
                 if found_any:
-                    checks.append((True, f"Response contains expected key terms"))
+                    checks.append((True, "Response contains expected key terms"))
                 else:
-                    checks.append((False, f"Response missing key terms from expected behavior"))
+                    checks.append((False, "Response missing key terms from expected behavior"))
 
         # Latency check
         checks.append(response_time_under(latency_ms, 30000))

@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, badge, stat_card
+from src.dashboard.components.styles import inject_css, callout, badge, stat_card, page_header
 from src.dashboard.components.metrics import severity_icon, severity_badge
 from src.dashboard.components.charts import COLORS, CATEGORY_COLORS, SEVERITY_COLORS
 
@@ -37,12 +37,7 @@ total_cases = len(all_cases)
 
 # ── Page header ───────────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div class="page-header">
-        <div class="page-title">📝 Test Cases Manager</div>
-        <div class="page-desc">Explora, filtra y crea casos de prueba · Aprende a diseñar tests para evaluar LLMs</div>
-    </div>
-    """,
+    page_header("📝", "Test Cases Manager", "Explora, filtra y crea casos de prueba · Aprende a diseñar tests para evaluar LLMs"),
     unsafe_allow_html=True,
 )
 
