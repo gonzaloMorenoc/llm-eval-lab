@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Housekeeping
+- 
+
 ### Added
 - `src/config.py` — process-wide LRU-cached YAML loader. Replaces 8 duplicated
   `_load_config()` helpers and avoids re-parsing `config.yaml` on every
