@@ -9,12 +9,11 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.chatbots.base import BaseRAGChatbot, ChatbotResponse
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -87,10 +86,12 @@ class TestKnowledgeBaseLoading:
     def test_loads_valid_knowledge_base(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"id": "kb_001", "title": "Python", "content": "Python is a language.", "metadata": {}},
-            {"id": "kb_002", "title": "Java", "content": "Java is a language.", "metadata": {}},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"id": "kb_001", "title": "Python", "content": "Python is a language.", "metadata": {}},
+                {"id": "kb_002", "title": "Java", "content": "Java is a language.", "metadata": {}},
+            ]
+        )
         try:
             chatbot = DemoRAGChatbot(knowledge_base_path=kb_path)
             assert chatbot._collection.count() >= 2
@@ -121,9 +122,11 @@ class TestKnowledgeBaseLoading:
     def test_missing_id_field_raises_error(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"title": "No ID", "content": "Missing id field."},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"title": "No ID", "content": "Missing id field."},
+            ]
+        )
         try:
             with pytest.raises(ValueError, match="missing required 'id' field"):
                 DemoRAGChatbot(knowledge_base_path=kb_path)
@@ -148,11 +151,13 @@ class TestKnowledgeBaseLoading:
     def test_skips_duplicate_ids_in_same_file(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"id": "kb_dedup_1", "content": "First version"},
-            {"id": "kb_dedup_1", "content": "Duplicate — should be skipped"},
-            {"id": "kb_dedup_2", "content": "Second unique entry"},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"id": "kb_dedup_1", "content": "First version"},
+                {"id": "kb_dedup_1", "content": "Duplicate — should be skipped"},
+                {"id": "kb_dedup_2", "content": "Second unique entry"},
+            ]
+        )
         try:
             chatbot = DemoRAGChatbot(knowledge_base_path=kb_path)
             # Verify only unique IDs were added (dedup_1 + dedup_2 = 2)
@@ -169,10 +174,12 @@ class TestRetrieval:
     async def test_retrieve_returns_list(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"id": "kb_ret_1", "content": "Machine learning is AI."},
-            {"id": "kb_ret_2", "content": "Python is a programming language."},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"id": "kb_ret_1", "content": "Machine learning is AI."},
+                {"id": "kb_ret_2", "content": "Python is a programming language."},
+            ]
+        )
         try:
             chatbot = DemoRAGChatbot(knowledge_base_path=kb_path)
             results = await chatbot.retrieve("machine learning")
@@ -185,9 +192,11 @@ class TestRetrieval:
     async def test_retrieve_returns_strings(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"id": "kb_str_1", "content": "Strings are text."},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"id": "kb_str_1", "content": "Strings are text."},
+            ]
+        )
         try:
             chatbot = DemoRAGChatbot(knowledge_base_path=kb_path)
             results = await chatbot.retrieve("strings")
@@ -204,9 +213,11 @@ class TestRAGComplete:
     async def test_successful_rag_response(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"id": "kb_comp_1", "content": "ML is artificial intelligence."},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"id": "kb_comp_1", "content": "ML is artificial intelligence."},
+            ]
+        )
         try:
             chatbot = DemoRAGChatbot(knowledge_base_path=kb_path)
             mock_response = _make_chat_response("ML is a branch of AI.")
@@ -227,9 +238,7 @@ class TestRAGComplete:
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
         chatbot = DemoRAGChatbot(knowledge_base_path="/nonexistent.jsonl")
-        chatbot._client.chat.completions.create = AsyncMock(
-            side_effect=Exception("API down")
-        )
+        chatbot._client.chat.completions.create = AsyncMock(side_effect=Exception("API down"))
 
         messages = [{"role": "user", "content": "Hello"}]
         with pytest.raises(RuntimeError, match="API call.*failed"):
@@ -250,9 +259,11 @@ class TestRAGComplete:
     async def test_extracts_last_user_message_for_retrieval(self):
         from src.chatbots.rag_chatbot import DemoRAGChatbot
 
-        kb_path = _create_knowledge_base([
-            {"id": "kb_ext_1", "content": "Python is great."},
-        ])
+        kb_path = _create_knowledge_base(
+            [
+                {"id": "kb_ext_1", "content": "Python is great."},
+            ]
+        )
         try:
             chatbot = DemoRAGChatbot(knowledge_base_path=kb_path)
             mock_response = _make_chat_response("Python!")

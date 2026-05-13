@@ -17,18 +17,12 @@ import logging
 import os
 import time
 
-import yaml
 from openai import AsyncOpenAI
 
 from src.chatbots.base import BaseChatbot, ChatbotResponse
+from src.config import load_config
 
 logger = logging.getLogger(__name__)
-
-
-def load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
 
 
 class OpenAICompatibleChatbot(BaseChatbot):
@@ -66,14 +60,12 @@ class OpenAICompatibleChatbot(BaseChatbot):
         try:
             response = await self._client.chat.completions.create(
                 model=self._model,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 **kwargs,
             )
         except Exception as e:
             logger.error("API call failed for %s/%s: %s", self._provider, self._model, e)
-            raise RuntimeError(
-                f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}"
-            ) from e
+            raise RuntimeError(f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}") from e
 
         latency = (time.perf_counter() - start) * 1000
 

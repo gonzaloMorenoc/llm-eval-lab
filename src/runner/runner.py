@@ -6,11 +6,11 @@ import asyncio
 import json
 import logging
 import os
-import traceback
+import re
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
-import yaml
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
@@ -24,14 +24,64 @@ from src.runner.models import (
     TestResult,
 )
 
+ChatbotMode = Literal["plain", "rag"]
+
 console = Console()
 logger = logging.getLogger(__name__)
 
+# Patterns that look like secrets (OpenAI/Anthropic/Groq/etc. API keys, bearer tokens).
+# We never want any of these to land in persisted report.json files.
+_SECRET_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9_\-]{12,}"),
+    re.compile(r"gsk_[A-Za-z0-9_\-]{12,}"),
+    re.compile(r"AIza[0-9A-Za-z_\-]{10,}"),
+    re.compile(r"Bearer\s+[A-Za-z0-9._\-]+", re.IGNORECASE),
+    re.compile(r"(?i)api[_-]?key[\"'=:\s]+[A-Za-z0-9_\-]{8,}"),
+)
+
+
+def _redact_secrets(text: str) -> str:
+    """Strip anything that looks like an API key or bearer token from a string."""
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
+def _summarize_error(exc: BaseException, max_len: int = 240) -> str:
+    """Build a short, redacted error string safe to persist in reports."""
+    msg = _redact_secrets(str(exc))
+    if len(msg) > max_len:
+        msg = msg[:max_len] + "…"
+    return f"{type(exc).__name__}: {msg}"
+
+
+def _is_rate_limit(exc: BaseException) -> bool:
+    """Heuristic for rate-limit/quota errors across SDKs."""
+    name = type(exc).__name__.lower()
+    if "ratelimit" in name or "quota" in name:
+        return True
+    status = getattr(exc, "status_code", None)
+    if status == 429:
+        return True
+    text = str(exc).lower()
+    return "429" in text or "rate limit" in text or "rate-limit" in text or "too many requests" in text
+
+
+def _is_network_error(exc: BaseException) -> bool:
+    """Heuristic for transient network errors that warrant a retry."""
+    name = type(exc).__name__.lower()
+    if "timeout" in name or "connection" in name or "apiconnection" in name:
+        return True
+    text = str(exc).lower()
+    return "timeout" in text or "timed out" in text or "connection" in text
+
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for backwards
+    compatibility with tests that monkeypatch this symbol)."""
+    from src.config import load_config
+
+    return load_config()
 
 
 def load_dataset(path: str) -> list[TestCase]:
@@ -49,9 +99,7 @@ def load_dataset(path: str) -> list[TestCase]:
             try:
                 cases.append(TestCase(**data))
             except Exception as e:
-                raise ValueError(
-                    f"Invalid test case in {path} at line {line_num}: {e}"
-                ) from e
+                raise ValueError(f"Invalid test case in {path} at line {line_num}: {e}") from e
     return cases
 
 
@@ -97,20 +145,21 @@ class EvalRunner:
                 response = await self._chatbot.complete(messages)
                 return response.content, response.retrieved_contexts, response.latency_ms, None
             except Exception as e:
-                # Preserve full error context including exception type and traceback
-                last_error = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
-                error_str = str(e).lower()
-                is_rate_limit = "429" in str(e) or "rate" in error_str
-                is_network = "timeout" in error_str or "connect" in error_str
-                if is_rate_limit or is_network:
-                    wait = self._retry_backoff_base ** attempt
+                # Persisted error stays short and redacted. The full traceback
+                # is only emitted to the application log (server-side).
+                last_error = _summarize_error(e)
+                if _is_rate_limit(e) or _is_network_error(e):
+                    wait = self._retry_backoff_base**attempt
                     logger.info(
                         "Retryable error (attempt %d/%d), waiting %ds: %s",
-                        attempt + 1, self._retry_attempts, wait, type(e).__name__,
+                        attempt + 1,
+                        self._retry_attempts,
+                        wait,
+                        type(e).__name__,
                     )
                     await asyncio.sleep(wait)
                 else:
-                    logger.error("Non-retryable chatbot error: %s", last_error)
+                    logger.exception("Non-retryable chatbot error")
                     break
         return "", None, 0.0, last_error
 
@@ -125,7 +174,7 @@ class EvalRunner:
 
             # Call chatbot
             content, contexts, latency, error = await self._call_chatbot(messages)
-            mode = "rag" if self._chatbot.is_rag else "plain"
+            mode: ChatbotMode = "rag" if self._chatbot.is_rag else "plain"
 
             result = TestResult(
                 test_case=test_case,
@@ -157,14 +206,17 @@ class EvalRunner:
                     )
                     evaluations.append(eval_result)
                 except Exception as e:
-                    logger.error("Evaluator '%s' crashed: %s: %s", eval_type, type(e).__name__, e)
-                    evaluations.append(EvaluationResult(
-                        evaluator=eval_type,
-                        passed=False,
-                        score=None,
-                        reason=f"Evaluator error: {type(e).__name__}: {e}",
-                        details={"error": str(e), "error_type": type(e).__name__},
-                    ))
+                    logger.exception("Evaluator '%s' crashed", eval_type)
+                    summary = _summarize_error(e)
+                    evaluations.append(
+                        EvaluationResult(
+                            evaluator=eval_type,
+                            passed=False,
+                            score=None,
+                            reason=f"Evaluator error: {summary}",
+                            details={"error": summary, "error_type": type(e).__name__},
+                        )
+                    )
 
             result.evaluations = evaluations
             result.overall_passed = all(e.passed for e in evaluations) if evaluations else False
@@ -176,9 +228,11 @@ class EvalRunner:
 
     async def run(self, test_cases: list[TestCase]) -> RunSummary:
         """Run all test cases and return a summary."""
-        run_id = str(uuid.uuid4())[:8]
-        timestamp = datetime.now(UTC).isoformat()
-        mode = "rag" if self._chatbot.is_rag else "plain"
+        # Sortable + collision-resistant: yyyymmddTHHMMSS + 8 hex chars (~3e10 namespace).
+        now = datetime.now(UTC)
+        run_id = f"{now.strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        timestamp = now.isoformat()
+        mode: ChatbotMode = "rag" if self._chatbot.is_rag else "plain"
 
         console.print(
             f"\n[bold]Starting evaluation run[/bold] — "
@@ -220,10 +274,7 @@ class EvalRunner:
         latencies = [r.latency_ms for r in results_list if r.latency_ms > 0]
         avg_latency = round(sum(latencies) / len(latencies), 2) if latencies else 0.0
 
-        critical_failures = sum(
-            1 for r in results_list
-            if not r.overall_passed and r.test_case.severity == "critical"
-        )
+        critical_failures = sum(1 for r in results_list if not r.overall_passed and r.test_case.severity == "critical")
 
         # By category
         by_category: dict[str, CategoryStats] = {}
@@ -249,10 +300,7 @@ class EvalRunner:
                     for metric_name, score in ev.details["metric_scores"].items():
                         ragas_scores.setdefault(metric_name, []).append(score)
 
-        ragas_aggregate = {
-            m: round(sum(scores) / len(scores), 4)
-            for m, scores in ragas_scores.items()
-        }
+        ragas_aggregate = {m: round(sum(scores) / len(scores), 4) for m, scores in ragas_scores.items()}
 
         # DeepEval aggregate scores
         deepeval_scores: dict[str, list[float]] = {}
@@ -262,10 +310,7 @@ class EvalRunner:
                     for metric_name, score in ev.details["metric_scores"].items():
                         deepeval_scores.setdefault(metric_name, []).append(score)
 
-        deepeval_aggregate = {
-            m: round(sum(scores) / len(scores), 4)
-            for m, scores in deepeval_scores.items()
-        }
+        deepeval_aggregate = {m: round(sum(scores) / len(scores), 4) for m, scores in deepeval_scores.items()}
 
         summary = RunSummary(
             run_id=run_id,

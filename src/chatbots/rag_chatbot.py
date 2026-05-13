@@ -25,18 +25,17 @@ import os
 import time
 
 import chromadb
-import yaml
 from openai import AsyncOpenAI
 
 from src.chatbots.base import BaseRAGChatbot, ChatbotResponse
+from src.config import load_config
 
 logger = logging.getLogger(__name__)
 
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for compatibility)."""
+    return load_config()
 
 
 class DemoRAGChatbot(BaseRAGChatbot):
@@ -79,9 +78,7 @@ class DemoRAGChatbot(BaseRAGChatbot):
         self._collection = self._chroma_client.get_or_create_collection(name=collection_name)
 
         # Load knowledge base
-        kb_path = knowledge_base_path or os.path.join(
-            os.path.dirname(__file__), "..", "..", "datasets", "rag_knowledge_base.jsonl"
-        )
+        kb_path = knowledge_base_path or os.path.join(os.path.dirname(__file__), "..", "..", "datasets", "rag_knowledge_base.jsonl")
         self._load_knowledge_base(os.path.abspath(kb_path))
 
     def _load_knowledge_base(self, path: str) -> None:
@@ -97,14 +94,10 @@ class DemoRAGChatbot(BaseRAGChatbot):
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError as e:
-                    raise ValueError(
-                        f"Malformed JSON in knowledge base at line {line_num}: {e}"
-                    ) from e
+                    raise ValueError(f"Malformed JSON in knowledge base at line {line_num}: {e}") from e
 
                 if "id" not in entry:
-                    raise ValueError(
-                        f"Knowledge base entry at line {line_num} missing required 'id' field"
-                    )
+                    raise ValueError(f"Knowledge base entry at line {line_num} missing required 'id' field")
 
                 doc_id = entry["id"]
                 # Skip if already exists in collection or in current batch
@@ -138,20 +131,18 @@ class DemoRAGChatbot(BaseRAGChatbot):
         # Build augmented messages with context in system prompt
         context_block = "\n\n---\n\n".join(contexts)
         system_content = self._context_template.format(context=context_block)
-        augmented_messages = [{"role": "system", "content": system_content}] + messages
+        augmented_messages = [{"role": "system", "content": system_content}, *messages]
 
         start = time.perf_counter()
         try:
             response = await self._client.chat.completions.create(
                 model=self._model,
-                messages=augmented_messages,
+                messages=augmented_messages,  # type: ignore[arg-type]
                 **kwargs,
             )
         except Exception as e:
             logger.error("RAG generation failed for %s/%s: %s", self._provider, self._model, e)
-            raise RuntimeError(
-                f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}"
-            ) from e
+            raise RuntimeError(f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}") from e
 
         latency = (time.perf_counter() - start) * 1000
 

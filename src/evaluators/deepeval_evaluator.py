@@ -33,12 +33,12 @@ Configuration:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any
 
-import yaml
-
+from src.config import load_config
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
 
@@ -46,9 +46,8 @@ logger = logging.getLogger(__name__)
 
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for compatibility)."""
+    return load_config()
 
 
 # Metrics that require retrieved_contexts (RAG-only)
@@ -67,12 +66,8 @@ class DeepEvalEvaluator(BaseEvaluator):
 
         self._thresholds = deepeval_cfg.get("thresholds", {})
         self._pass_threshold = deepeval_cfg.get("pass_threshold", 0.5)
-        self._default_metrics_plain = deepeval_cfg.get(
-            "default_metrics_plain", ["answer_relevancy", "bias", "toxicity"]
-        )
-        self._default_metrics_rag = deepeval_cfg.get(
-            "default_metrics_rag", ["answer_relevancy", "hallucination", "bias", "toxicity"]
-        )
+        self._default_metrics_plain = deepeval_cfg.get("default_metrics_plain", ["answer_relevancy", "bias", "toxicity"])
+        self._default_metrics_rag = deepeval_cfg.get("default_metrics_rag", ["answer_relevancy", "hallucination", "bias", "toxicity"])
         self._model = deepeval_cfg.get("evaluator_model", "gpt-4o-mini")
 
         openai_key = os.getenv("OPENAI_API_KEY", "")
@@ -91,27 +86,33 @@ class DeepEvalEvaluator(BaseEvaluator):
 
         if metric_name == "answer_relevancy":
             from deepeval.metrics import AnswerRelevancyMetric
+
             return AnswerRelevancyMetric(threshold=threshold, model=self._model)
 
         if metric_name == "hallucination":
             from deepeval.metrics import HallucinationMetric
+
             return HallucinationMetric(threshold=threshold, model=self._model)
 
         if metric_name == "bias":
             from deepeval.metrics import BiasMetric
+
             return BiasMetric(threshold=threshold, model=self._model)
 
         if metric_name == "toxicity":
             from deepeval.metrics import ToxicityMetric
+
             return ToxicityMetric(threshold=threshold, model=self._model)
 
         if metric_name == "faithfulness":
             from deepeval.metrics import FaithfulnessMetric
+
             return FaithfulnessMetric(threshold=threshold, model=self._model)
 
         if metric_name == "g_eval":
             from deepeval.metrics import GEval
             from deepeval.test_case import LLMTestCaseParams
+
             return GEval(
                 name="Correctness",
                 criteria="Determine whether the response is factually correct and complete.",
@@ -201,7 +202,10 @@ class DeepEvalEvaluator(BaseEvaluator):
                 errors[metric_name] = f"Metric '{metric_name}' not available"
                 continue
             try:
-                metric.measure(deepeval_tc)
+                # DeepEval's measure() is synchronous and performs network I/O.
+                # Run it in a worker thread so the asyncio event loop (and other
+                # parallel test cases via the runner semaphore) stays responsive.
+                await asyncio.to_thread(metric.measure, deepeval_tc)
                 score = float(metric.score)
                 metric_scores[metric_name] = score
                 metric_passed[metric_name] = metric.is_successful()
@@ -222,8 +226,8 @@ class DeepEvalEvaluator(BaseEvaluator):
             t = self._thresholds.get(m, self._pass_threshold)
             status = "PASS" if metric_passed.get(m, False) else "FAIL"
             reasons.append(f"{m}: {s:.3f} (threshold {t}, {status})")
-        for m, e in errors.items():
-            reasons.append(f"{m}: ERROR — {e}")
+        for m, err in errors.items():
+            reasons.append(f"{m}: ERROR — {err}")
 
         return EvaluationResult(
             evaluator=self.name(),

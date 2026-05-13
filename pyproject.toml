@@ -7,6 +7,8 @@ name = "llm-eval-lab"
 version = "0.3.0"
 description = "QA framework for evaluating AI chatbots — functional tests, safety checks, RAGAS metrics, DeepEval metrics, LLM-as-judge, and Streamlit dashboard."
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
+readme = "README.md"
 dependencies = [
     "pydantic>=2.0",
     "httpx>=0.27",
@@ -17,6 +19,7 @@ dependencies = [
     "deepeval>=1.0",
     "openai>=1.0",
     "chromadb>=0.5",
+    "langchain-openai>=0.2",
 ]
 
 [project.optional-dependencies]
@@ -38,9 +41,16 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "--cov=src --cov-report=term-missing --cov-report=html:htmlcov -v"
 
+[tool.coverage.run]
+omit = [
+    "src/__main__.py",
+    "src/dashboard/*",
+    "src/dashboard/**/*",
+]
+
 [tool.ruff]
 target-version = "py311"
-line-length = 120
+line-length = 140
 
 [tool.ruff.lint]
 select = [
@@ -57,17 +67,26 @@ ignore = [
     "S101",  # assert usage (needed in tests)
     "S603",  # subprocess without shell=True
     "S607",  # partial path
+    "RUF001",  # ambiguous unicode chars in strings (em dash widely used in docstrings)
+    "RUF003",  # ambiguous unicode chars in comments
+    "E501",  # line-too-long (long HTML/docstrings tolerated)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S106"]
+"tests/**" = ["S101", "S106", "B017", "RUF043"]
+"src/dashboard/pages/**" = ["E402"]  # Streamlit pages must call set_page_config first
+"src/chatbots/mock_adapter.py" = ["S311"]  # mock-only random latency, not crypto
 
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "yaml"
 ignore_missing_imports = true
 
 [tool.setuptools.packages.find]

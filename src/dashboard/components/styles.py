@@ -420,10 +420,7 @@ def wizard_bar(steps: list[str], current: int) -> str:
             cls_num, cls_label, icon = "wz-pending", "wz-label-pending", str(i + 1)
 
         parts.append(
-            f'<div class="wz-step">'
-            f'<div class="wz-num {cls_num}">{icon}</div>'
-            f'<span class="wz-label {cls_label}">{label}</span>'
-            f"</div>"
+            f'<div class="wz-step"><div class="wz-num {cls_num}">{icon}</div><span class="wz-label {cls_label}">{label}</span></div>'
         )
         if i < len(steps) - 1:
             line_cls = "wz-line-done" if i < current else "wz-line"

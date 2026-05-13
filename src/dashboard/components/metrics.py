@@ -27,7 +27,7 @@ def metric_card(label: str, value: str, delta: str | None = None, delta_color: s
 def kpi_row(metrics: list[tuple[str, str, str | None]]) -> None:
     """Render a row of KPI metrics. Each tuple: (label, value, optional_color_border)."""
     cols = st.columns(len(metrics))
-    for col, (label, value, color) in zip(cols, metrics):
+    for col, (label, value, color) in zip(cols, metrics, strict=False):
         with col:
             border = f"border-left: 4px solid {color};" if color else ""
             st.markdown(
@@ -95,7 +95,7 @@ def score_bar(score: float | None, max_val: float = 1.0) -> str:
         f'<div style="display:flex; align-items:center; gap:6px;">'
         f'<div style="flex:1; background:#2d2d44; border-radius:4px; height:8px; overflow:hidden;">'
         f'<div style="width:{pct:.0f}%; background:{color}; height:100%; border-radius:4px;"></div>'
-        f'</div>'
+        f"</div>"
         f'<span style="font-size:0.8rem; color:{color}; min-width:40px;">{score:.2f}</span>'
-        f'</div>'
+        f"</div>"
     )

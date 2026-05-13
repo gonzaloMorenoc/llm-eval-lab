@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from src.chatbots.mock_adapter import MockChatbot, MockRAGChatbot
+from src.evaluators.consistency import ConsistencyEvaluator
 from src.evaluators.rule_based import RuleBasedEvaluator
 from src.evaluators.safety import SafetyEvaluator
-from src.evaluators.consistency import ConsistencyEvaluator
 from src.runner.models import RunSummary, TestCase, TestResult
 from src.runner.runner import EvalRunner, load_all_datasets, load_dataset
 
@@ -28,6 +28,7 @@ class TestDatasetLoading:
 
     def test_load_functional_dataset(self):
         import os
+
         path = os.path.join(os.path.dirname(__file__), "..", "datasets", "functional.jsonl")
         cases = load_dataset(os.path.abspath(path))
         assert len(cases) >= 10  # Expanded dataset
@@ -35,6 +36,7 @@ class TestDatasetLoading:
 
     def test_load_safety_dataset(self):
         import os
+
         path = os.path.join(os.path.dirname(__file__), "..", "datasets", "safety.jsonl")
         cases = load_dataset(os.path.abspath(path))
         assert len(cases) >= 10  # Expanded dataset
@@ -42,6 +44,7 @@ class TestDatasetLoading:
 
     def test_load_regression_dataset(self):
         import os
+
         path = os.path.join(os.path.dirname(__file__), "..", "datasets", "regression.jsonl")
         cases = load_dataset(os.path.abspath(path))
         assert len(cases) >= 8  # Expanded dataset
@@ -114,7 +117,7 @@ class TestEvalRunner:
         summary = await runner.run(cases)
 
         assert len(summary.by_category) > 0
-        for cat, stats in summary.by_category.items():
+        for stats in summary.by_category.values():
             assert stats.total > 0
             assert stats.total == stats.passed + stats.failed
 

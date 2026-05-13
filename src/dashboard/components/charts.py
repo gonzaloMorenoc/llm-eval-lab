@@ -57,10 +57,10 @@ def pass_rate_bar_chart(categories: dict[str, dict]) -> go.Figure:
             x=rates,
             orientation="h",
             marker_color=colors,
-            text=[f"{r:.0f}% ({p}/{t})" for r, p, t in zip(rates, passed, total)],
+            text=[f"{r:.0f}% ({p}/{t})" for r, p, t in zip(rates, passed, total, strict=False)],
             textposition="outside",
             hovertemplate="%{y}: %{x:.1f}%<br>Passed: %{customdata[0]}/%{customdata[1]}<extra></extra>",
-            customdata=list(zip(passed, total)),
+            customdata=list(zip(passed, total, strict=False)),
         )
     )
     fig.update_layout(
@@ -85,8 +85,8 @@ def metrics_radar_chart(
 
     names = list(metrics.keys())
     values = list(metrics.values())
-    names_closed = names + [names[0]]
-    values_closed = values + [values[0]]
+    names_closed = [*names, names[0]]
+    values_closed = [*values, values[0]]
     theta = [n.replace("_", " ").title() for n in names_closed]
 
     fig = go.Figure()
@@ -136,7 +136,6 @@ def metrics_radar_chart(
 
 def latency_histogram(latencies: list[float]) -> go.Figure:
     """Histogram of response latencies with percentile markers."""
-    import statistics
 
     fig = go.Figure(
         go.Histogram(
@@ -157,8 +156,14 @@ def latency_histogram(latencies: list[float]) -> go.Figure:
         p95 = sorted_lat[min(p95_idx, len(sorted_lat) - 1)]
 
         for pval, label, color in [(p50, "P50", COLORS["success"]), (p95, "P95", COLORS["warning"])]:
-            fig.add_vline(x=pval, line_dash="dash", line_color=color, line_width=1.5,
-                          annotation_text=f"{label}: {pval:.0f}ms", annotation_font_color=color)
+            fig.add_vline(
+                x=pval,
+                line_dash="dash",
+                line_color=color,
+                line_width=1.5,
+                annotation_text=f"{label}: {pval:.0f}ms",
+                annotation_font_color=color,
+            )
 
     fig.update_layout(
         **_LAYOUT_DEFAULTS,

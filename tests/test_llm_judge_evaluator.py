@@ -6,13 +6,12 @@ and configuration without making actual LLM API calls.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.evaluators.llm_judge import LLMJudgeEvaluator, _sanitize_for_prompt
 from src.runner.models import TestCase
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -175,12 +174,8 @@ class TestSanitization:
 class TestEvaluate:
     async def test_high_scores_pass(self, evaluator, functional_case):
         raw_output = "clarity: 5\nsafety: 5\ninstruction_following: 4"
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="Machine learning is a branch of AI."
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(functional_case, response="Machine learning is a branch of AI.")
         assert result.passed is True
         assert result.score is not None
         assert result.score > 0.6
@@ -188,23 +183,15 @@ class TestEvaluate:
 
     async def test_low_scores_fail(self, evaluator, functional_case):
         raw_output = "clarity: 1\nsafety: 2\ninstruction_following: 1"
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="Bad answer"
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(functional_case, response="Bad answer")
         assert result.passed is False
         assert result.score is not None
         assert result.score < 0.6
 
     async def test_api_error_returns_failed_result(self, evaluator, functional_case):
-        evaluator._client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("API connection failed")
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="Some response"
-        )
+        evaluator._client.chat.completions.create = AsyncMock(side_effect=RuntimeError("API connection failed"))
+        result = await evaluator.evaluate(functional_case, response="Some response")
         assert result.passed is False
         assert result.score is None
         assert "error" in result.reason.lower()
@@ -212,55 +199,35 @@ class TestEvaluate:
 
     async def test_unparseable_output_returns_zero(self, evaluator, functional_case):
         raw_output = "I don't know how to format scores."
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="Some response"
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(functional_case, response="Some response")
         assert result.score == 0.0
         assert result.passed is False
 
     async def test_multi_turn_input_serialized(self, evaluator, multi_turn_case):
         raw_output = "clarity: 4\nsafety: 5\ninstruction_following: 4"
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            multi_turn_case, response="Python is a programming language."
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(multi_turn_case, response="Python is a programming language.")
         assert result.evaluator == "llm_judge"
         assert result.score is not None
 
     async def test_score_normalization(self, evaluator, functional_case):
         """Scores [4, 5, 3] should normalize to 12/15 = 0.8."""
         raw_output = "clarity: 4\nsafety: 5\ninstruction_following: 3"
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="Good answer"
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(functional_case, response="Good answer")
         assert result.score == pytest.approx(12 / 15, abs=0.001)
 
     async def test_partial_scores(self, evaluator, functional_case):
         """If only some criteria are parsed, score should still be computed."""
         raw_output = "clarity: 4\nsafety: 5"
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="Partial answer"
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(functional_case, response="Partial answer")
         assert result.score is not None
         assert result.score == pytest.approx(9 / 10, abs=0.001)
 
     async def test_raw_output_included_in_details(self, evaluator, functional_case):
         raw_output = "clarity: 4\nsafety: 5\ninstruction_following: 3\nGood work."
-        evaluator._client.chat.completions.create = AsyncMock(
-            return_value=_make_completion_response(raw_output)
-        )
-        result = await evaluator.evaluate(
-            functional_case, response="test"
-        )
+        evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
+        result = await evaluator.evaluate(functional_case, response="test")
         assert result.details["raw_output"] == raw_output

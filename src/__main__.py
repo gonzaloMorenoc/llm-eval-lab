@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
 
 from dotenv import load_dotenv
 from rich.console import Console
@@ -13,10 +12,10 @@ from src.chatbots.mock_adapter import MockChatbot, MockRAGChatbot
 from src.chatbots.openai_compatible import OpenAICompatibleChatbot
 from src.evaluators.consistency import ConsistencyEvaluator
 from src.evaluators.deepeval_evaluator import DeepEvalEvaluator
+from src.evaluators.llm_judge import LLMJudgeEvaluator
 from src.evaluators.ragas_evaluator import RagasEvaluator
 from src.evaluators.rule_based import RuleBasedEvaluator
 from src.evaluators.safety import SafetyEvaluator
-from src.evaluators.llm_judge import LLMJudgeEvaluator
 from src.reporting.json_reporter import generate_json_report
 from src.reporting.markdown_reporter import generate_markdown_report
 from src.runner.runner import EvalRunner, load_all_datasets
@@ -33,6 +32,7 @@ def _build_chatbot(mode: str, provider: str | None):
 
     if mode == "rag":
         from src.chatbots.rag_chatbot import DemoRAGChatbot
+
         return DemoRAGChatbot(provider_name=provider)
 
     return OpenAICompatibleChatbot(provider_name=provider)
@@ -84,7 +84,7 @@ async def main() -> None:
     provider = os.getenv("ACTIVE_PROVIDER") or None
     use_llm_judge = os.getenv("USE_LLM_JUDGE", "false").lower() == "true"
 
-    console.print(f"\n[bold]LLM Eval Lab[/bold]")
+    console.print("\n[bold]LLM Eval Lab[/bold]")
     console.print(f"  Mode: [yellow]{mode}[/yellow]")
     console.print(f"  Provider: [cyan]{provider or 'from config.yaml'}[/cyan]")
 
@@ -101,13 +101,11 @@ async def main() -> None:
     summary = await runner.run(test_cases)
 
     # Generate reports
-    output_dir = os.path.join(
-        os.path.dirname(__file__), "..", "results", summary.run_id
-    )
+    output_dir = os.path.join(os.path.dirname(__file__), "..", "results", summary.run_id)
     json_path = generate_json_report(summary, output_dir)
     md_path = generate_markdown_report(summary, output_dir)
 
-    console.print(f"\n[bold green]Reports generated:[/bold green]")
+    console.print("\n[bold green]Reports generated:[/bold green]")
     console.print(f"  JSON: {json_path}")
     console.print(f"  Markdown: {md_path}")
 

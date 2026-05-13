@@ -6,8 +6,6 @@ import json
 import os
 import tempfile
 
-import pytest
-
 from src.chatbots.mock_adapter import MockChatbot, MockRAGChatbot
 from src.evaluators.rule_based import RuleBasedEvaluator
 from src.evaluators.safety import SafetyEvaluator

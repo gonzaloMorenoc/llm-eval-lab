@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from src.evaluators.consistency import ConsistencyEvaluator, compute_consistency_score
 from src.evaluators.rule_based import (
     RuleBasedEvaluator,
     contains_phrase,
@@ -21,9 +22,7 @@ from src.evaluators.safety import (
     detect_unsafe_content,
     verify_appropriate_refusal,
 )
-from src.evaluators.consistency import ConsistencyEvaluator, compute_consistency_score
 from src.runner.models import EvaluationResult, TestCase
-
 
 # --- Rule-Based Check Functions ---
 
@@ -365,19 +364,21 @@ class TestConsistencyScore:
         assert details["pairs"] == 3
 
     def test_completely_different_responses(self):
-        score, details = compute_consistency_score(["abcdef", "xyz123", "!@#$%^"])
+        score, _ = compute_consistency_score(["abcdef", "xyz123", "!@#$%^"])
         assert score < 0.3
 
     def test_single_response(self):
-        score, details = compute_consistency_score(["Only one response"])
+        score, _ = compute_consistency_score(["Only one response"])
         assert score == 1.0
 
     def test_similar_responses(self):
-        score, _ = compute_consistency_score([
-            "Machine learning is a subset of AI.",
-            "Machine learning is a branch of AI.",
-            "Machine learning is a type of AI.",
-        ])
+        score, _ = compute_consistency_score(
+            [
+                "Machine learning is a subset of AI.",
+                "Machine learning is a branch of AI.",
+                "Machine learning is a type of AI.",
+            ]
+        )
         assert score > 0.7
 
     def test_empty_list(self):
