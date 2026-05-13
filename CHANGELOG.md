@@ -8,10 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Housekeeping
-- Removed stale `claude/*` topic branches from the remote after their PRs
-  (#1, #2, #3) were merged. The main history is now authored exclusively
-  by Gonzalo Moreno; the GitHub Contributors graph and sidebar reflect this
-  once the contributor stats job re-runs.
+- 
 
 ### Added
 - `src/config.py` — process-wide LRU-cached YAML loader. Replaces 8 duplicated
