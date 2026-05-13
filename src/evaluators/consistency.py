@@ -28,19 +28,16 @@ completely different answers.
 
 from __future__ import annotations
 
-import os
 from difflib import SequenceMatcher
 
-import yaml
-
+from src.config import load_config
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
 
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for compatibility)."""
+    return load_config()
 
 
 def _similarity(a: str, b: str) -> float:
@@ -97,7 +94,7 @@ class ConsistencyEvaluator(BaseEvaluator):
         prior_responses = test_case.metadata.get("consistency_responses", [])
 
         if prior_responses:
-            all_responses = prior_responses + [response]
+            all_responses = [*prior_responses, response]
             score, details = compute_consistency_score(all_responses)
             passed = score >= self._threshold
 
@@ -121,10 +118,7 @@ class ConsistencyEvaluator(BaseEvaluator):
                 evaluator=self.name(),
                 passed=passed,
                 score=round(score, 4),
-                reason=(
-                    f"Response-reference similarity {score:.3f} "
-                    f"({'PASS' if passed else 'FAIL'}, threshold {self._threshold})"
-                ),
+                reason=(f"Response-reference similarity {score:.3f} ({'PASS' if passed else 'FAIL'}, threshold {self._threshold})"),
                 details={"mode": "single_vs_reference", "similarity": round(score, 4)},
             )
 

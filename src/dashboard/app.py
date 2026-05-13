@@ -12,18 +12,18 @@ import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, how_step, stat_card, badge
-from src.dashboard.components.charts import pass_rate_bar_chart, COLORS
+from src.dashboard.components.charts import pass_rate_bar_chart
 from src.dashboard.components.shared import (
-    list_runs,
-    pass_rate_color,
+    CATEGORY_DESCRIPTIONS,
     CATEGORY_ICONS,
     CATEGORY_LABEL_COLORS,
-    CATEGORY_DESCRIPTIONS,
     SEVERITY_ICONS,
     SEVERITY_ORDER,
+    list_runs,
+    pass_rate_color,
 )
+from src.dashboard.components.sidebar import render_sidebar
+from src.dashboard.components.styles import how_step, inject_css, stat_card
 
 
 def main() -> None:
@@ -66,10 +66,14 @@ def main() -> None:
             ("Runs completados", str(len(runs)), "#6366f1", ""),
             ("Último Pass Rate", f"{pr:.0%}", pr_color, "≥70% = bueno"),
             ("Avg Score", f"{latest.get('avg_score', 0):.3f}", "#38bdf8", "0.0 – 1.0"),
-            ("Critical Failures", str(latest.get("critical_failures", 0)),
-             "#ef4444" if latest.get("critical_failures", 0) > 0 else "#22c55e", "objetivo: 0"),
+            (
+                "Critical Failures",
+                str(latest.get("critical_failures", 0)),
+                "#ef4444" if latest.get("critical_failures", 0) > 0 else "#22c55e",
+                "objetivo: 0",
+            ),
         ]
-        for col, (label, val, color, extra) in zip(s_cols, stats):
+        for col, (label, val, color, extra) in zip(s_cols, stats, strict=False):
             with col:
                 st.markdown(
                     f'<div style="text-align:center;">{stat_card(label, val, color, extra=extra)}</div>',
@@ -84,20 +88,36 @@ def main() -> None:
     )
     nav_cols = st.columns(4)
     nav_items = [
-        ("nav-run", "🚀", "Run Evaluation",
-         "Lanza evaluaciones contra cualquier proveedor LLM. Configura datasets, evaluadores y obtén resultados al instante.",
-         "pages/1_run.py"),
-        ("nav-results", "📊", "Results Dashboard",
-         "Visualiza métricas detalladas, gráficos interactivos y analiza cada test con score y feedback explicado.",
-         "pages/2_results.py"),
-        ("nav-compare", "🔄", "Compare Runs",
-         "Compara dos ejecuciones side-by-side. Descubre qué modelo gana, en qué categorías y por cuánto.",
-         "pages/3_compare.py"),
-        ("nav-tests", "📝", "Test Cases",
-         "Explora y crea casos de prueba. Aprende qué tipos de tests evalúan los LLMs y cómo diseñarlos.",
-         "pages/4_test_cases.py"),
+        (
+            "nav-run",
+            "🚀",
+            "Run Evaluation",
+            "Lanza evaluaciones contra cualquier proveedor LLM. Configura datasets, evaluadores y obtén resultados al instante.",
+            "pages/1_run.py",
+        ),
+        (
+            "nav-results",
+            "📊",
+            "Results Dashboard",
+            "Visualiza métricas detalladas, gráficos interactivos y analiza cada test con score y feedback explicado.",
+            "pages/2_results.py",
+        ),
+        (
+            "nav-compare",
+            "🔄",
+            "Compare Runs",
+            "Compara dos ejecuciones side-by-side. Descubre qué modelo gana, en qué categorías y por cuánto.",
+            "pages/3_compare.py",
+        ),
+        (
+            "nav-tests",
+            "📝",
+            "Test Cases",
+            "Explora y crea casos de prueba. Aprende qué tipos de tests evalúan los LLMs y cómo diseñarlos.",
+            "pages/4_test_cases.py",
+        ),
     ]
-    for col, (cls, icon, title, desc, page) in zip(nav_cols, nav_items):
+    for col, (cls, icon, title, desc, page) in zip(nav_cols, nav_items, strict=False):
         with col:
             st.markdown(
                 f"""
@@ -126,14 +146,26 @@ def main() -> None:
 
     how_col1, how_col2 = st.columns(2)
     steps = [
-        (1, "📦 Selecciona un Dataset",
-         "Elige entre 4 categorías: Funcionales (respuestas correctas), Seguridad (ataques), Regresión (estabilidad) y Multi-turn (conversaciones)."),
-        (2, "⚙️ Configura Provider & Modo",
-         "Selecciona qué LLM evaluar: Groq (Llama 3), Gemini, Mistral u OpenRouter. Usa Mock para pruebas sin API key. Elige Plain o RAG."),
-        (3, "🧪 Elige los Evaluadores",
-         "Cada evaluador mide un aspecto distinto: Rule-Based (reglas), Safety (ataques), RAGAS (relevancia/factualidad), DeepEval (alucinaciones/sesgo)."),
-        (4, "📊 Analiza y Compara",
-         "Obtén Pass Rate, scores por categoría, latencias y métricas detalladas. Compara runs para decidir qué modelo usar en producción."),
+        (
+            1,
+            "📦 Selecciona un Dataset",
+            "Elige entre 4 categorías: Funcionales (respuestas correctas), Seguridad (ataques), Regresión (estabilidad) y Multi-turn (conversaciones).",
+        ),
+        (
+            2,
+            "⚙️ Configura Provider & Modo",
+            "Selecciona qué LLM evaluar: Groq (Llama 3), Gemini, Mistral u OpenRouter. Usa Mock para pruebas sin API key. Elige Plain o RAG.",
+        ),
+        (
+            3,
+            "🧪 Elige los Evaluadores",
+            "Cada evaluador mide un aspecto distinto: Rule-Based (reglas), Safety (ataques), RAGAS (relevancia/factualidad), DeepEval (alucinaciones/sesgo).",
+        ),
+        (
+            4,
+            "📊 Analiza y Compara",
+            "Obtén Pass Rate, scores por categoría, latencias y métricas detalladas. Compara runs para decidir qué modelo usar en producción.",
+        ),
     ]
     with how_col1:
         for num, title, desc in steps[:2]:
@@ -156,24 +188,48 @@ def main() -> None:
     )
 
     concepts = [
-        ("🎯", "Pass Rate",
-         "% de tests que el modelo supera. Objetivo en producción: ≥70%. Por debajo del 50% indica problemas graves de calidad.",
-         "badge-pass", "Objetivo ≥70%"),
-        ("📐", "RAGAS Metrics",
-         "Faithfulness (¿se basa en contexto real?), Answer Relevancy (¿responde lo pedido?), Context Precision. Especializado para RAG.",
-         "badge-info", "Framework RAGAS"),
-        ("🛡️", "Safety Evaluation",
-         "Detecta vulnerabilidades: prompt injection, filtración del system prompt, contenido dañino. Crítico antes de ir a producción.",
-         "badge-fail", "Tipo: Seguridad"),
-        ("🔄", "Consistency",
-         "¿El modelo responde igual ante la misma pregunta? Alta variabilidad indica inestabilidad o alucinaciones frecuentes.",
-         "badge-warn", "Métrica: Cosine Sim"),
-        ("⚖️", "LLM Judge",
-         "Usa GPT-4 como evaluador según rúbricas personalizadas. Más flexible y próximo al juicio humano que métricas automáticas.",
-         "badge-purple", "Evaluador: GPT-4"),
-        ("🔍", "DeepEval",
-         "Mide hallucination (datos inventados), bias (sesgos), toxicity (contenido dañino) y GEval (evaluación holística).",
-         "badge-gray", "Framework DeepEval"),
+        (
+            "🎯",
+            "Pass Rate",
+            "% de tests que el modelo supera. Objetivo en producción: ≥70%. Por debajo del 50% indica problemas graves de calidad.",
+            "badge-pass",
+            "Objetivo ≥70%",
+        ),
+        (
+            "📐",
+            "RAGAS Metrics",
+            "Faithfulness (¿se basa en contexto real?), Answer Relevancy (¿responde lo pedido?), Context Precision. Especializado para RAG.",
+            "badge-info",
+            "Framework RAGAS",
+        ),
+        (
+            "🛡️",
+            "Safety Evaluation",
+            "Detecta vulnerabilidades: prompt injection, filtración del system prompt, contenido dañino. Crítico antes de ir a producción.",
+            "badge-fail",
+            "Tipo: Seguridad",
+        ),
+        (
+            "🔄",
+            "Consistency",
+            "¿El modelo responde igual ante la misma pregunta? Alta variabilidad indica inestabilidad o alucinaciones frecuentes.",
+            "badge-warn",
+            "Métrica: Cosine Sim",
+        ),
+        (
+            "⚖️",
+            "LLM Judge",
+            "Usa GPT-4 como evaluador según rúbricas personalizadas. Más flexible y próximo al juicio humano que métricas automáticas.",
+            "badge-purple",
+            "Evaluador: GPT-4",
+        ),
+        (
+            "🔍",
+            "DeepEval",
+            "Mide hallucination (datos inventados), bias (sesgos), toxicity (contenido dañino) y GEval (evaluación holística).",
+            "badge-gray",
+            "Framework DeepEval",
+        ),
     ]
 
     c1, c2, c3 = st.columns(3)
@@ -198,6 +254,7 @@ def main() -> None:
 
     # ── Dataset Overview ───────────────────────────────────────────────────────
     from src.runner.runner import load_all_datasets
+
     cases = load_all_datasets()
 
     categories: dict[str, int] = {}
@@ -219,17 +276,15 @@ def main() -> None:
     for i, (cat, count) in enumerate(sorted(categories.items())):
         with ds_cols[i]:
             color = cat_colors.get(cat, "#888")
-            icon  = cat_icons.get(cat, "📋")
-            desc  = cat_descs.get(cat, "")
+            icon = cat_icons.get(cat, "📋")
+            desc = cat_descs.get(cat, "")
             st.markdown(
                 stat_card(cat.replace("_", " ").title(), f"{icon} {count}", color, extra=desc),
                 unsafe_allow_html=True,
             )
 
     with ds_cols[-1]:
-        sev_lines  = " · ".join(
-            f"{SEVERITY_ICONS[s]} {severities.get(s, 0)} {s}" for s in SEVERITY_ORDER if s in severities
-        )
+        sev_lines = " · ".join(f"{SEVERITY_ICONS[s]} {severities.get(s, 0)} {s}" for s in SEVERITY_ORDER if s in severities)
         st.markdown(
             stat_card("Total Test Cases", f"📊 {len(cases)}", "#a78bfa", extra=sev_lines),
             unsafe_allow_html=True,
@@ -257,19 +312,19 @@ def main() -> None:
                 f"""
                 <div class="card">
                     <div style="font-size:0.7rem; color:#6366f1; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; margin-bottom:0.5rem;">Último Run</div>
-                    <div style="font-size:1rem; font-weight:700; color:#e2e8f0;">{latest.get("run_id","?")}</div>
-                    <div style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">{latest.get("timestamp","")[:19]} · {latest.get("chatbot_id","?")} ({latest.get("chatbot_mode","?")})</div>
+                    <div style="font-size:1rem; font-weight:700; color:#e2e8f0;">{latest.get("run_id", "?")}</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">{latest.get("timestamp", "")[:19]} · {latest.get("chatbot_id", "?")} ({latest.get("chatbot_mode", "?")})</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
                         <div>
                             <div style="font-size:1.9rem; font-weight:800; color:{pr_color};">{pr:.0%}</div>
                             <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Pass Rate</div>
                         </div>
                         <div>
-                            <div style="font-size:1.9rem; font-weight:800; color:#38bdf8;">{latest.get("avg_score",0):.3f}</div>
+                            <div style="font-size:1.9rem; font-weight:800; color:#38bdf8;">{latest.get("avg_score", 0):.3f}</div>
                             <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Avg Score</div>
                         </div>
                         <div>
-                            <div style="font-size:1.4rem; font-weight:700; color:#e2e8f0;">{latest.get("avg_latency_ms",0):.0f}ms</div>
+                            <div style="font-size:1.4rem; font-weight:700; color:#e2e8f0;">{latest.get("avg_latency_ms", 0):.0f}ms</div>
                             <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Avg Latency</div>
                         </div>
                         <div>
@@ -278,9 +333,9 @@ def main() -> None:
                         </div>
                     </div>
                     <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
-                        <span class="badge badge-pass">✅ {latest.get("passed",0)} passed</span>
-                        <span class="badge badge-fail">❌ {latest.get("failed",0)} failed</span>
-                        <span class="badge badge-info">📊 {latest.get("total",0)} total</span>
+                        <span class="badge badge-pass">✅ {latest.get("passed", 0)} passed</span>
+                        <span class="badge badge-fail">❌ {latest.get("failed", 0)} failed</span>
+                        <span class="badge badge-info">📊 {latest.get("total", 0)} total</span>
                     </div>
                 </div>
                 """,
@@ -297,16 +352,18 @@ def main() -> None:
             st.markdown("**Historial de runs**")
             table = []
             for r in runs[:10]:
-                table.append({
-                    "Run ID":    r.get("run_id", "?"),
-                    "Provider":  r.get("chatbot_id", "?"),
-                    "Mode":      r.get("chatbot_mode", "?"),
-                    "Pass Rate": f"{r.get('pass_rate', 0):.0%}",
-                    "Avg Score": f"{r.get('avg_score', 0):.3f}",
-                    "Latency":   f"{r.get('avg_latency_ms', 0):.0f}ms",
-                    "Tests":     r.get("total", 0),
-                    "Date":      r.get("timestamp", "")[:19],
-                })
+                table.append(
+                    {
+                        "Run ID": r.get("run_id", "?"),
+                        "Provider": r.get("chatbot_id", "?"),
+                        "Mode": r.get("chatbot_mode", "?"),
+                        "Pass Rate": f"{r.get('pass_rate', 0):.0%}",
+                        "Avg Score": f"{r.get('avg_score', 0):.3f}",
+                        "Latency": f"{r.get('avg_latency_ms', 0):.0f}ms",
+                        "Tests": r.get("total", 0),
+                        "Date": r.get("timestamp", "")[:19],
+                    }
+                )
             st.dataframe(table, use_container_width=True, hide_index=True)
     else:
         st.markdown(

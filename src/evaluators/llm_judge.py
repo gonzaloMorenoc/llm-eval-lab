@@ -30,9 +30,9 @@ import logging
 import os
 import re
 
-import yaml
 from openai import AsyncOpenAI
 
+from src.config import load_config
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
 
@@ -42,9 +42,8 @@ _MAX_SCORE_PER_CRITERION = 5
 
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for compatibility)."""
+    return load_config()
 
 
 def _load_rubric() -> str:
@@ -118,11 +117,7 @@ class LLMJudgeEvaluator(BaseEvaluator):
             if not scores:
                 logger.warning("LLM judge returned no parseable scores. Raw output: %s", raw[:200])
 
-            global_score = (
-                sum(scores.values()) / (len(scores) * _MAX_SCORE_PER_CRITERION)
-                if scores
-                else 0.0
-            )
+            global_score = sum(scores.values()) / (len(scores) * _MAX_SCORE_PER_CRITERION) if scores else 0.0
 
             return EvaluationResult(
                 evaluator=self.name(),
@@ -142,12 +137,20 @@ class LLMJudgeEvaluator(BaseEvaluator):
             )
 
     def _parse_scores(self, raw: str) -> dict[str, int]:
-        """Parse scores from LLM output. Expects lines like 'clarity: 4'."""
+        """Parse scores from LLM output.
+
+        Accepts a variety of common formats produced by judge LLMs:
+          ``clarity: 4``, ``Clarity = 4``, ``Clarity (1-5): 4``,
+          ``- Clarity ... 4/5``. Values above the criterion max are clamped.
+        """
         scores: dict[str, int] = {}
         for criterion in self.CRITERIA:
-            pattern = rf"{criterion}\s*[:=]\s*(\d)"
+            # Allow any non-digit, non-newline filler (e.g. "(1-5)") between
+            # the criterion name and the separator. The separator can be ':',
+            # '=', or '-'. Digits can be 1+ chars so '10' parses too.
+            pattern = rf"{re.escape(criterion)}\b[^\n:=\-]*[:=\-]\s*(\d+)"
             match = re.search(pattern, raw, re.IGNORECASE)
             if match:
                 value = int(match.group(1))
-                scores[criterion] = min(value, _MAX_SCORE_PER_CRITERION)
+                scores[criterion] = max(0, min(value, _MAX_SCORE_PER_CRITERION))
         return scores

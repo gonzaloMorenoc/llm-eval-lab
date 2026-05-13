@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 class TestCase(BaseModel):
     """A single test case loaded from a JSONL dataset."""
 
+    __test__ = False  # Prevent pytest from trying to collect this Pydantic model
+
     id: str
     category: Literal["functional", "multi_turn", "safety", "regression"]
     input: str | list[dict]  # str for single-turn, list[dict] for multi-turn
@@ -33,6 +35,8 @@ class EvaluationResult(BaseModel):
 
 class TestResult(BaseModel):
     """Full result for one test case including all evaluations."""
+
+    __test__ = False  # Prevent pytest from trying to collect this Pydantic model
 
     test_case: TestCase
     response: str

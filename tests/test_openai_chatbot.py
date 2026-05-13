@@ -6,12 +6,11 @@ processing without making actual API calls.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.chatbots.base import BaseChatbot, ChatbotResponse
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -113,9 +112,7 @@ class TestOpenAIChatbotComplete:
         from src.chatbots.openai_compatible import OpenAICompatibleChatbot
 
         chatbot = OpenAICompatibleChatbot()
-        chatbot._client.chat.completions.create = AsyncMock(
-            side_effect=Exception("Connection refused")
-        )
+        chatbot._client.chat.completions.create = AsyncMock(side_effect=Exception("Connection refused"))
 
         messages = [{"role": "user", "content": "Hello"}]
         with pytest.raises(RuntimeError, match="API call.*failed"):

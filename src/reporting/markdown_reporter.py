@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import os
 
-import yaml
-
+from src.config import load_config
 from src.runner.models import RunSummary
 
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for compatibility)."""
+    return load_config()
 
 
 def generate_markdown_report(summary: RunSummary, output_dir: str) -> str:
@@ -74,10 +72,7 @@ def generate_markdown_report(summary: RunSummary, output_dir: str) -> str:
     w("")
 
     # Critical & high failures
-    critical_high = [
-        r for r in summary.results
-        if not r.overall_passed and r.test_case.severity in ("critical", "high")
-    ]
+    critical_high = [r for r in summary.results if not r.overall_passed and r.test_case.severity in ("critical", "high")]
     if critical_high:
         w("## Critical & High Failures\n")
         for r in critical_high:
@@ -90,10 +85,9 @@ def generate_markdown_report(summary: RunSummary, output_dir: str) -> str:
             if r.retrieved_contexts:
                 w(f"- **Retrieved Contexts**: {len(r.retrieved_contexts)} documents")
                 for i, ctx in enumerate(r.retrieved_contexts[:3]):
-                    w(f"  - Context {i+1}: {ctx[:150]}...")
+                    w(f"  - Context {i + 1}: {ctx[:150]}...")
             for ev in r.evaluations:
-                w(f"- **{ev.evaluator}**: {'PASS' if ev.passed else 'FAIL'} "
-                  f"(score: {ev.score}) — {ev.reason[:200]}")
+                w(f"- **{ev.evaluator}**: {'PASS' if ev.passed else 'FAIL'} (score: {ev.score}) — {ev.reason[:200]}")
             w("")
 
     # Problematic response examples (3 worst by overall_score)
@@ -138,10 +132,7 @@ def _generate_recommendations(summary: RunSummary, thresholds: dict) -> list[str
         recs.append("Overall pass rate is below 50%. Consider reviewing the chatbot's base capabilities.")
 
     if summary.critical_failures > 0:
-        recs.append(
-            f"{summary.critical_failures} critical test(s) failed. "
-            "Prioritize fixing these before other improvements."
-        )
+        recs.append(f"{summary.critical_failures} critical test(s) failed. Prioritize fixing these before other improvements.")
 
     for metric, avg in summary.ragas_aggregate.items():
         t = thresholds.get(metric, 0.65)
@@ -152,19 +143,12 @@ def _generate_recommendations(summary: RunSummary, thresholds: dict) -> list[str
                     "The chatbot generates claims not supported by the retrieved context."
                 )
             elif metric == "context_precision":
-                recs.append(
-                    f"Context Precision ({avg:.3f}) is below threshold ({t}). "
-                    "The retriever is returning irrelevant documents."
-                )
+                recs.append(f"Context Precision ({avg:.3f}) is below threshold ({t}). The retriever is returning irrelevant documents.")
             elif metric == "context_recall":
-                recs.append(
-                    f"Context Recall ({avg:.3f}) is below threshold ({t}). "
-                    "The retriever is missing relevant documents."
-                )
+                recs.append(f"Context Recall ({avg:.3f}) is below threshold ({t}). The retriever is missing relevant documents.")
             elif metric == "answer_relevancy":
                 recs.append(
-                    f"Answer Relevancy ({avg:.3f}) is below threshold ({t}). "
-                    "Responses are not addressing the user's questions directly."
+                    f"Answer Relevancy ({avg:.3f}) is below threshold ({t}). Responses are not addressing the user's questions directly."
                 )
             elif metric == "factual_correctness":
                 recs.append(
@@ -177,9 +161,6 @@ def _generate_recommendations(summary: RunSummary, thresholds: dict) -> list[str
     # Check for safety failures
     safety_cat = summary.by_category.get("safety")
     if safety_cat and safety_cat.failed > 0:
-        recs.append(
-            f"{safety_cat.failed} safety test(s) failed. "
-            "Review the chatbot's safety guardrails and system prompt."
-        )
+        recs.append(f"{safety_cat.failed} safety test(s) failed. Review the chatbot's safety guardrails and system prompt.")
 
     return recs

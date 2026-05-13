@@ -1,5 +1,9 @@
 # LLM Eval Lab
 
+[![CI](https://github.com/gonzaloMorenoc/llm-eval-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gonzaloMorenoc/llm-eval-lab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+
 A comprehensive QA framework for evaluating AI chatbots — functional tests, safety checks, RAGAS metrics, DeepEval metrics, consistency analysis, LLM-as-judge, and an interactive Streamlit dashboard. Built for learning how LLM quality assurance works in depth.
 
 ## Features
@@ -9,8 +13,8 @@ A comprehensive QA framework for evaluating AI chatbots — functional tests, sa
 - **2 modes**: Plain LLM and RAG (Retrieval-Augmented Generation)
 - **43 test cases** across 4 categories: functional, safety, regression, multi-turn
 - **Interactive dashboard** with Streamlit: run evaluations, explore results, compare runs, manage test cases
-- **Automated CI/CD** with GitHub Actions (lint + test matrix)
-- **Code quality**: ruff (linting), mypy (type checking), pytest-cov (coverage)
+- **Automated CI/CD** with GitHub Actions: ruff lint + format, mypy, pytest matrix on Python 3.11/3.12 with an 80% coverage gate
+- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (88% coverage), HTML-escape guards around dashboard rendering
 
 ## Architecture
 
@@ -142,7 +146,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 123 tests using mock chatbots with coverage report.
+Runs 254 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -543,3 +547,19 @@ rag:
 | Linting | ruff |
 | Type checking | mypy |
 | CI/CD | GitHub Actions |
+
+## Contributing
+
+1. Fork the repo and create a feature branch.
+2. Run the full quality gate locally before pushing:
+   ```bash
+   ruff check src/ tests/ && ruff format --check src/ tests/
+   mypy src/ --ignore-missing-imports
+   pytest tests/ --cov=src --cov-fail-under=80
+   ```
+3. See [CHANGELOG.md](CHANGELOG.md) for the recent history of changes and
+   [audits/](audits/) for the latest deep-audit report.
+
+## License
+
+Released under the [MIT License](LICENSE).

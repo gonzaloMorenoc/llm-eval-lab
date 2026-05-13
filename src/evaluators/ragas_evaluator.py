@@ -39,10 +39,9 @@ import logging
 import os
 from typing import Any
 
-import yaml
-
 # LangChain wrappers for RAGAS
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from pydantic import SecretStr
 
 # RAGAS imports
 from ragas import SingleTurnSample
@@ -56,6 +55,7 @@ from ragas.metrics import (
     RougeScore,
 )
 
+from src.config import load_config
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
 
@@ -63,9 +63,8 @@ logger = logging.getLogger(__name__)
 
 
 def _load_config() -> dict:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.yaml")
-    with open(os.path.abspath(config_path)) as f:
-        return yaml.safe_load(f)
+    """Local wrapper around the cached project loader (kept for compatibility)."""
+    return load_config()
 
 
 # Metrics that require retrieved_contexts (RAG-only)
@@ -101,10 +100,9 @@ class RagasEvaluator(BaseEvaluator):
                 "RAGAS uses an LLM (gpt-4o-mini by default) to compute semantic metrics."
             )
 
-        self._llm = LangchainLLMWrapper(ChatOpenAI(model=evaluator_model, api_key=openai_key))
-        self._embeddings = LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(model=embeddings_model, api_key=openai_key)
-        )
+        secret_key = SecretStr(openai_key)
+        self._llm = LangchainLLMWrapper(ChatOpenAI(model=evaluator_model, api_key=secret_key))
+        self._embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings(model=embeddings_model, api_key=secret_key))
 
     def name(self) -> str:
         return "ragas"
@@ -122,20 +120,24 @@ class RagasEvaluator(BaseEvaluator):
         # Try importing context_precision and context_recall (may vary by ragas version)
         try:
             from ragas.metrics import LLMContextPrecisionWithReference
+
             constructors["context_precision"] = LLMContextPrecisionWithReference
         except ImportError:
             try:
                 from ragas.metrics import ContextPrecision
+
                 constructors["context_precision"] = ContextPrecision
             except ImportError:
                 pass
 
         try:
             from ragas.metrics import LLMContextRecall
+
             constructors["context_recall"] = LLMContextRecall
         except ImportError:
             try:
                 from ragas.metrics import ContextRecall
+
                 constructors["context_recall"] = ContextRecall
             except ImportError:
                 pass
@@ -252,8 +254,8 @@ class RagasEvaluator(BaseEvaluator):
             t = self._thresholds.get(m, self._pass_threshold)
             status = "PASS" if s >= t else "FAIL"
             reasons.append(f"{m}: {s:.3f} (threshold {t}, {status})")
-        for m, e in errors.items():
-            reasons.append(f"{m}: ERROR — {e}")
+        for m, err in errors.items():
+            reasons.append(f"{m}: ERROR — {err}")
 
         return EvaluationResult(
             evaluator=self.name(),

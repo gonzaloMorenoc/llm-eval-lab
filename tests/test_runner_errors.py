@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -17,9 +16,8 @@ from src.chatbots.base import BaseChatbot, ChatbotResponse
 from src.chatbots.mock_adapter import MockChatbot
 from src.evaluators.base import BaseEvaluator
 from src.evaluators.rule_based import RuleBasedEvaluator
-from src.runner.models import EvaluationResult, TestCase
+from src.runner.models import TestCase
 from src.runner.runner import EvalRunner, load_dataset
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -100,8 +98,9 @@ class RecoveringChatbot(BaseChatbot):
 class TestDatasetLoadingErrors:
     def test_malformed_json_reports_line_number(self):
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
-        tmp.write('{"id": "ok", "category": "functional", "input": "test", '
-                  '"expected_behavior": "test", "evaluation_type": ["rule_based"]}\n')
+        tmp.write(
+            '{"id": "ok", "category": "functional", "input": "test", "expected_behavior": "test", "evaluation_type": ["rule_based"]}\n'
+        )
         tmp.write("this is not json\n")
         tmp.close()
         try:
@@ -112,8 +111,10 @@ class TestDatasetLoadingErrors:
 
     def test_invalid_test_case_reports_line_number(self):
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
-        tmp.write('{"id": "bad", "category": "invalid_category", "input": "test", '
-                  '"expected_behavior": "test", "evaluation_type": ["rule_based"]}\n')
+        tmp.write(
+            '{"id": "bad", "category": "invalid_category", "input": "test", '
+            '"expected_behavior": "test", "evaluation_type": ["rule_based"]}\n'
+        )
         tmp.close()
         try:
             with pytest.raises(ValueError, match="line 1"):
@@ -162,9 +163,7 @@ class TestRetryLogic:
             chatbot=chatbot,
             evaluators={"rule_based": RuleBasedEvaluator()},
         )
-        content, contexts, latency, error = await runner._call_chatbot(
-            [{"role": "user", "content": "test"}]
-        )
+        _, _, _, error = await runner._call_chatbot([{"role": "user", "content": "test"}])
         assert error is not None
         assert "Generic API error" in error
         assert chatbot._call_count == 1  # No retry
@@ -177,9 +176,7 @@ class TestRetryLogic:
             evaluators={"rule_based": RuleBasedEvaluator()},
             config={"runner": {"max_concurrent": 1, "retry_attempts": 3, "retry_backoff_base": 0.01}},
         )
-        content, contexts, latency, error = await runner._call_chatbot(
-            [{"role": "user", "content": "test"}]
-        )
+        _, _, _, error = await runner._call_chatbot([{"role": "user", "content": "test"}])
         assert error is not None
         assert chatbot._call_count == 3  # All retries exhausted
 
@@ -191,9 +188,7 @@ class TestRetryLogic:
             evaluators={},
             config={"runner": {"max_concurrent": 1, "retry_attempts": 2, "retry_backoff_base": 0.01}},
         )
-        content, contexts, latency, error = await runner._call_chatbot(
-            [{"role": "user", "content": "test"}]
-        )
+        _, _, _, error = await runner._call_chatbot([{"role": "user", "content": "test"}])
         assert error is not None
         assert chatbot._call_count == 2
 
@@ -205,9 +200,7 @@ class TestRetryLogic:
             evaluators={"rule_based": RuleBasedEvaluator()},
             config={"runner": {"max_concurrent": 1, "retry_attempts": 3, "retry_backoff_base": 0.01}},
         )
-        content, contexts, latency, error = await runner._call_chatbot(
-            [{"role": "user", "content": "test"}]
-        )
+        content, _, _, error = await runner._call_chatbot([{"role": "user", "content": "test"}])
         assert error is None
         assert content == "Recovered response"
         assert chatbot._call_count == 3  # 2 failures + 1 success
@@ -291,9 +284,7 @@ class TestRunnerEdgeCases:
             chatbot=chatbot,
             evaluators={},
         )
-        content, contexts, latency, error = await runner._call_chatbot(
-            [{"role": "user", "content": "test"}]
-        )
+        _, _, _, error = await runner._call_chatbot([{"role": "user", "content": "test"}])
         assert "Exception:" in error
         assert "Generic API error" in error
 

@@ -8,11 +8,46 @@ This module centralizes:
 
 from __future__ import annotations
 
+import html
 import json
+import logging
 import os
+from typing import Any
 
 import streamlit as st
-import yaml
+
+logger = logging.getLogger(__name__)
+
+
+def safe(value: Any) -> str:
+    """Escape any value for safe interpolation into HTML rendered via
+    ``unsafe_allow_html=True``. Use whenever the value originates from a
+    persisted dataset, user input, model response, or any other untrusted
+    source. Non-string values are stringified first.
+    """
+    if value is None:
+        return ""
+    return html.escape(str(value), quote=True)
+
+
+def append_jsonl(path: str, entry: dict[str, Any]) -> None:
+    """Append a single JSON object as a canonical JSONL line.
+
+    Behaves correctly whether or not the existing file ends with a newline
+    (a previous bug used ``"\\n" + json.dumps(...)`` which both produced an
+    extra blank line in the middle of well-formed files and missed the
+    trailing newline at EOF, slowly desynchronising the format).
+    """
+    needs_newline = False
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        with open(path, "rb") as f:
+            f.seek(-1, os.SEEK_END)
+            needs_newline = f.read(1) != b"\n"
+    with open(path, "a", encoding="utf-8") as f:
+        if needs_newline:
+            f.write("\n")
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -27,9 +62,15 @@ CONFIG_PATH = os.path.join(_ROOT_DIR, "config", "config.yaml")
 
 @st.cache_data(ttl=60)
 def load_config() -> dict:
-    """Load config.yaml with Streamlit caching (refreshes every 60s)."""
-    with open(CONFIG_PATH) as f:
-        return yaml.safe_load(f)
+    """Load config.yaml with Streamlit caching (refreshes every 60s).
+
+    Delegates to the project-wide cached loader so the YAML file is parsed
+    at most once per process, with Streamlit's TTL cache on top so the
+    dashboard picks up edits without a full restart.
+    """
+    from src.config import load_config as _project_load_config
+
+    return _project_load_config(refresh=True)
 
 
 # ── Run Listing ───────────────────────────────────────────────────────────────
@@ -51,8 +92,8 @@ def list_runs() -> list[dict]:
                         data = json.load(f)
                     data["_run_id"] = run_id
                     runs.append(data)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to load run %s: %s", run_id, e)
     # Include the latest in-memory run if not already in the list
     last = st.session_state.get("last_summary")
     if last and not any(r.get("run_id") == last.get("run_id") for r in runs):

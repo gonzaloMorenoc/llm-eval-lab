@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 
 from src.runner.models import (
-    CategoryStats,
     EvaluationResult,
     RunSummary,
     TestCase,
-    TestResult,
 )
 
 

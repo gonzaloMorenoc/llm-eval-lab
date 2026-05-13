@@ -9,19 +9,19 @@ import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, badge, stat_card, page_header
-from src.dashboard.components.metrics import severity_icon, kpi_row, severity_badge, score_bar
 from src.dashboard.components.charts import (
     COLORS,
-    pass_rate_bar_chart,
-    metrics_radar_chart,
-    latency_histogram,
-    severity_pie_chart,
     evaluator_scores_chart,
+    latency_histogram,
+    metrics_radar_chart,
+    pass_rate_bar_chart,
     score_distribution_chart,
+    severity_pie_chart,
 )
+from src.dashboard.components.metrics import kpi_row, score_bar, severity_icon
 from src.dashboard.components.shared import list_runs
+from src.dashboard.components.sidebar import render_sidebar
+from src.dashboard.components.styles import badge, callout, inject_css, page_header, stat_card
 
 st.set_page_config(page_title="Results — LLM Eval Lab", page_icon="📊", layout="wide")
 inject_css()
@@ -56,8 +56,7 @@ if not runs:
 
 # ── Run Selector ──────────────────────────────────────────────────────────────
 run_labels = [
-    f"{r.get('run_id','?')} · {r.get('chatbot_id','?')} ({r.get('chatbot_mode','?')}) · {r.get('timestamp','')[:19]}"
-    for r in runs
+    f"{r.get('run_id', '?')} · {r.get('chatbot_id', '?')} ({r.get('chatbot_mode', '?')}) · {r.get('timestamp', '')[:19]}" for r in runs
 ]
 selected_idx = st.selectbox("📁 Seleccionar Run", range(len(runs)), format_func=lambda i: run_labels[i])
 summary = runs[selected_idx]
@@ -68,30 +67,43 @@ st.divider()
 pass_rate = summary.get("pass_rate", 0)
 pass_color = COLORS["success"] if pass_rate >= 0.7 else (COLORS["warning"] if pass_rate >= 0.5 else COLORS["danger"])
 
-kpi_row([
-    ("Pass Rate",         f"{pass_rate:.1%}",                              pass_color),
-    ("Avg Score",         f"{summary.get('avg_score', 0):.3f}",            COLORS["primary"]),
-    ("Avg Latency",       f"{summary.get('avg_latency_ms', 0):.0f}ms",     COLORS["info"]),
-    ("Critical Failures", str(summary.get("critical_failures", 0)),
-     COLORS["danger"] if summary.get("critical_failures", 0) > 0 else COLORS["success"]),
-    ("Total",             f"{summary.get('passed', 0)}✅ {summary.get('failed', 0)}❌ / {summary.get('total', 0)}", None),
-])
+kpi_row(
+    [
+        ("Pass Rate", f"{pass_rate:.1%}", pass_color),
+        ("Avg Score", f"{summary.get('avg_score', 0):.3f}", COLORS["primary"]),
+        ("Avg Latency", f"{summary.get('avg_latency_ms', 0):.0f}ms", COLORS["info"]),
+        (
+            "Critical Failures",
+            str(summary.get("critical_failures", 0)),
+            COLORS["danger"] if summary.get("critical_failures", 0) > 0 else COLORS["success"],
+        ),
+        ("Total", f"{summary.get('passed', 0)}✅ {summary.get('failed', 0)}❌ / {summary.get('total', 0)}", None),
+    ]
+)
 
 # Insight automático
 crit = summary.get("critical_failures", 0)
 if crit > 0:
     st.markdown(
-        callout(f"<strong>{crit} fallos críticos</strong> detectados. Estos casos tienen prioridad máxima de corrección antes de producción.", kind="error"),
+        callout(
+            f"<strong>{crit} fallos críticos</strong> detectados. Estos casos tienen prioridad máxima de corrección antes de producción.",
+            kind="error",
+        ),
         unsafe_allow_html=True,
     )
 elif pass_rate >= 0.9:
     st.markdown(
-        callout(f"Pass Rate de <strong>{pass_rate:.0%}</strong> — Excelente calidad. El modelo supera el 90% de los tests.", kind="success"),
+        callout(
+            f"Pass Rate de <strong>{pass_rate:.0%}</strong> — Excelente calidad. El modelo supera el 90% de los tests.", kind="success"
+        ),
         unsafe_allow_html=True,
     )
 elif pass_rate < 0.5:
     st.markdown(
-        callout(f"Pass Rate de <strong>{pass_rate:.0%}</strong> — Por debajo del mínimo recomendado (50%). Revisa la configuración del modelo.", kind="warning"),
+        callout(
+            f"Pass Rate de <strong>{pass_rate:.0%}</strong> — Por debajo del mínimo recomendado (50%). Revisa la configuración del modelo.",
+            kind="warning",
+        ),
         unsafe_allow_html=True,
     )
 
@@ -214,10 +226,10 @@ with tab_metrics:
                     f"""
                     <div style="display:flex; align-items:center; justify-content:space-between;
                          padding:0.4rem 0; border-bottom:1px solid #2d2d44;">
-                        <span style="font-size:0.85rem; color:#e2e8f0;">{metric.replace('_',' ').title()}</span>
+                        <span style="font-size:0.85rem; color:#e2e8f0;">{metric.replace("_", " ").title()}</span>
                         <div style="display:flex; align-items:center; gap:0.5rem;">
                             <span style="font-size:0.8rem; color:#94a3b8;">umbral {t}</span>
-                            <span style="font-size:0.85rem; font-weight:700; color:{'#4ade80' if passed else '#f87171'};">{avg:.3f}</span>
+                            <span style="font-size:0.85rem; font-weight:700; color:{"#4ade80" if passed else "#f87171"};">{avg:.3f}</span>
                             {status_badge}
                         </div>
                     </div>
@@ -259,10 +271,10 @@ with tab_metrics:
                     f"""
                     <div style="display:flex; align-items:center; justify-content:space-between;
                          padding:0.4rem 0; border-bottom:1px solid #2d2d44;">
-                        <span style="font-size:0.85rem; color:#e2e8f0;">{metric.replace('_',' ').title()}</span>
+                        <span style="font-size:0.85rem; color:#e2e8f0;">{metric.replace("_", " ").title()}</span>
                         <div style="display:flex; align-items:center; gap:0.5rem;">
                             <span style="font-size:0.8rem; color:#94a3b8;">umbral {t}</span>
-                            <span style="font-size:0.85rem; font-weight:700; color:{'#4ade80' if passed else '#f87171'};">{avg:.3f}</span>
+                            <span style="font-size:0.85rem; font-weight:700; color:{"#4ade80" if passed else "#f87171"};">{avg:.3f}</span>
                             {status_badge}
                         </div>
                     </div>
@@ -299,12 +311,12 @@ with tab_latency:
 
         lat_cols = st.columns(4)
         lat_stats = [
-            ("Mínima",     f"{min(latencies):.0f}ms",          "#22c55e"),
-            ("Mediana P50", f"{sorted_lat[len(sorted_lat)//2]:.0f}ms", "#6366f1"),
-            ("P95",        f"{sorted_lat[p95_idx]:.0f}ms",     "#f59e0b"),
-            ("Máxima",     f"{max(latencies):.0f}ms",          "#ef4444"),
+            ("Mínima", f"{min(latencies):.0f}ms", "#22c55e"),
+            ("Mediana P50", f"{sorted_lat[len(sorted_lat) // 2]:.0f}ms", "#6366f1"),
+            ("P95", f"{sorted_lat[p95_idx]:.0f}ms", "#f59e0b"),
+            ("Máxima", f"{max(latencies):.0f}ms", "#ef4444"),
         ]
-        for col, (label, val, color) in zip(lat_cols, lat_stats):
+        for col, (label, val, color) in zip(lat_cols, lat_stats, strict=False):
             with col:
                 st.markdown(stat_card(label, val, color), unsafe_allow_html=True)
     else:
@@ -342,17 +354,19 @@ with tab_evaluators:
         ev_table = []
         for name, stats in sorted(eval_stats.items()):
             total = stats["passed"] + stats["failed"]
-            avg   = sum(stats["scores"]) / len(stats["scores"]) if stats["scores"] else None
-            ev_table.append({
-                "Evaluador": name.replace("_", " ").title(),
-                "Tests":     total,
-                "Pasados":   stats["passed"],
-                "Fallados":  stats["failed"],
-                "Pass Rate": f"{stats['passed']/total:.1%}" if total else "—",
-                "Avg Score": f"{avg:.3f}" if avg else "—",
-                "Min":       f"{min(stats['scores']):.3f}" if stats["scores"] else "—",
-                "Max":       f"{max(stats['scores']):.3f}" if stats["scores"] else "—",
-            })
+            avg = sum(stats["scores"]) / len(stats["scores"]) if stats["scores"] else None
+            ev_table.append(
+                {
+                    "Evaluador": name.replace("_", " ").title(),
+                    "Tests": total,
+                    "Pasados": stats["passed"],
+                    "Fallados": stats["failed"],
+                    "Pass Rate": f"{stats['passed'] / total:.1%}" if total else "—",
+                    "Avg Score": f"{avg:.3f}" if avg else "—",
+                    "Min": f"{min(stats['scores']):.3f}" if stats["scores"] else "—",
+                    "Max": f"{max(stats['scores']):.3f}" if stats["scores"] else "—",
+                }
+            )
         st.dataframe(ev_table, use_container_width=True, hide_index=True)
 
 st.divider()
@@ -363,25 +377,25 @@ st.markdown(
     unsafe_allow_html=True,
 )
 by_cat = summary.get("by_category", {})
-cat_icons  = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
+cat_icons = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
 cat_colors = {"functional": "#6366f1", "safety": "#ef4444", "regression": "#22c55e", "multi_turn": "#38bdf8"}
 
 if by_cat:
     cat_cols = st.columns(len(by_cat))
-    for col, (cat, stats) in zip(cat_cols, sorted(by_cat.items())):
+    for col, (cat, stats) in zip(cat_cols, sorted(by_cat.items()), strict=False):
         with col:
             pr = stats.get("pass_rate", 0)
             color = cat_colors.get(cat, "#888")
-            icon  = cat_icons.get(cat, "📋")
+            icon = cat_icons.get(cat, "📋")
             pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
             st.markdown(
                 f"""
                 <div class="stat-card" style="border-left:3px solid {color}; text-align:center;">
                     <div style="font-size:1.5rem;">{icon}</div>
-                    <div style="font-size:0.8rem; font-weight:700; color:{color}; margin:0.2rem 0;">{cat.replace('_',' ').title()}</div>
+                    <div style="font-size:0.8rem; font-weight:700; color:{color}; margin:0.2rem 0;">{cat.replace("_", " ").title()}</div>
                     <div style="font-size:1.8rem; font-weight:800; color:{pr_color};">{pr:.0%}</div>
                     <div style="font-size:0.7rem; color:#64748b;">
-                        ✅{stats.get('passed',0)} ❌{stats.get('failed',0)} / {stats.get('total',0)}
+                        ✅{stats.get("passed", 0)} ❌{stats.get("failed", 0)} / {stats.get("total", 0)}
                     </div>
                 </div>
                 """,
@@ -401,7 +415,8 @@ if results:
     filter_cols = st.columns(4)
     with filter_cols[0]:
         f_cat = st.selectbox(
-            "Categoría", ["All"] + sorted({r.get("test_case", {}).get("category", "") for r in results}),
+            "Categoría",
+            ["All", *sorted({r.get("test_case", {}).get("category", "") for r in results})],
             key="f_cat",
         )
     with filter_cols[1]:
@@ -423,22 +438,22 @@ if results:
     if f_search:
         sl = f_search.lower()
         filtered = [
-            r for r in filtered
-            if sl in r.get("test_case", {}).get("id", "").lower()
-            or sl in str(r.get("test_case", {}).get("input", "")).lower()
+            r
+            for r in filtered
+            if sl in r.get("test_case", {}).get("id", "").lower() or sl in str(r.get("test_case", {}).get("input", "")).lower()
         ]
 
     st.caption(f"Mostrando **{len(filtered)}** de {len(results)} resultados")
 
     for r in filtered:
-        tc     = r.get("test_case", {})
+        tc = r.get("test_case", {})
         passed = r.get("overall_passed", False)
-        score  = r.get("overall_score")
-        icon   = "✅" if passed else "❌"
-        sev    = severity_icon(tc.get("severity", "medium"))
+        score = r.get("overall_score")
+        icon = "✅" if passed else "❌"
+        sev = severity_icon(tc.get("severity", "medium"))
         border_color = "#22c55e" if passed else "#ef4444"
 
-        label = f"{icon} {sev} **{tc.get('id','?')}** — {tc.get('category','?')} — Score: {f'{score:.3f}' if score is not None else '—'} — {r.get('latency_ms',0):.0f}ms"
+        label = f"{icon} {sev} **{tc.get('id', '?')}** — {tc.get('category', '?')} — Score: {f'{score:.3f}' if score is not None else '—'} — {r.get('latency_ms', 0):.0f}ms"
 
         with st.expander(label):
             detail_col1, detail_col2 = st.columns([3, 2])
@@ -448,27 +463,32 @@ if results:
                 if isinstance(input_val, list):
                     st.markdown("**💬 Conversación:**")
                     for msg in input_val:
-                        role  = msg.get("role", "?")
+                        role = msg.get("role", "?")
                         emoji = "👤" if role == "user" else "🤖"
-                        st.markdown(f"{emoji} **{role}:** {msg.get('content','')}")
+                        st.markdown(f"{emoji} **{role}:**")
+                        st.text(msg.get("content", ""))
                 else:
-                    st.markdown(f"**📥 Input:** {input_val}")
+                    st.markdown("**📥 Input:**")
+                    st.text(input_val)
 
-                st.markdown(f"**🎯 Comportamiento esperado:** {tc.get('expected_behavior','')}")
+                st.markdown("**🎯 Comportamiento esperado:**")
+                st.text(tc.get("expected_behavior", ""))
                 st.markdown("**🤖 Respuesta del modelo:**")
                 st.text(r.get("response", "")[:600])
 
             with detail_col2:
-                sev_cls = {"critical": "badge-fail", "high": "badge-warn", "medium": "badge-warn", "low": "badge-gray"}.get(tc.get("severity", "medium"), "badge-gray")
+                sev_cls = {"critical": "badge-fail", "high": "badge-warn", "medium": "badge-warn", "low": "badge-gray"}.get(
+                    tc.get("severity", "medium"), "badge-gray"
+                )
                 st.markdown(
-                    f'<span class="badge {sev_cls}">{tc.get("severity","?").upper()}</span>',
+                    f'<span class="badge {sev_cls}">{tc.get("severity", "?").upper()}</span>',
                     unsafe_allow_html=True,
                 )
                 st.markdown("**Evaluaciones:**")
                 for ev in r.get("evaluations", []):
-                    ev_icon  = "✅" if ev.get("passed") else "❌"
+                    ev_icon = "✅" if ev.get("passed") else "❌"
                     ev_score = ev.get("score")
-                    st.markdown(f"{ev_icon} **{ev.get('evaluator','?')}**")
+                    st.markdown(f"{ev_icon} **{ev.get('evaluator', '?')}**")
                     if ev_score is not None:
                         st.markdown(score_bar(ev_score), unsafe_allow_html=True)
                     reason = ev.get("reason", "")

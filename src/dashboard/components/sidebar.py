@@ -44,7 +44,7 @@ def render_sidebar() -> dict:
         )
 
         active = config.get("active_provider", "groq")
-        all_providers = ["mock"] + providers
+        all_providers = ["mock", *providers]
         default_idx = all_providers.index(active) if active in all_providers else 0
 
         provider = st.selectbox(
@@ -74,14 +74,14 @@ def render_sidebar() -> dict:
             )
         elif provider in config.get("providers", {}):
             p_cfg = config["providers"][provider]
-            model       = p_cfg.get("model", "?")
-            limits      = p_cfg.get("free_limits", "Sin info")
+            model = p_cfg.get("model", "?")
+            limits = p_cfg.get("free_limits", "Sin info")
             api_key_env = p_cfg.get("api_key_env", "")
-            has_key     = bool(os.getenv(api_key_env, ""))
+            has_key = bool(os.getenv(api_key_env, ""))
 
-            key_color  = "#22c55e" if has_key else "#ef4444"
+            key_color = "#22c55e" if has_key else "#ef4444"
             key_status = "🟢 Configurada" if has_key else "🔴 Faltante"
-            key_hint   = "" if has_key else f"<br><span style='color:#ef4444;'>Configura <code>{api_key_env}</code> en tu .env</span>"
+            key_hint = "" if has_key else f"<br><span style='color:#ef4444;'>Configura <code>{api_key_env}</code> en tu .env</span>"
 
             st.markdown(
                 f"""
@@ -129,7 +129,7 @@ def render_sidebar() -> dict:
 
         mode_desc = {
             "plain": "Llamadas directas al LLM sin contexto recuperado. Evalúa el conocimiento base del modelo.",
-            "rag":   "Recupera documentos de ChromaDB antes de responder. Evalúa faithfulness y context precision.",
+            "rag": "Recupera documentos de ChromaDB antes de responder. Evalúa faithfulness y context precision.",
         }
         st.markdown(
             f"""
@@ -155,12 +155,12 @@ def render_sidebar() -> dict:
         )
 
         evaluator_info = {
-            "rule_based":  ("📏", "Rule-Based",  "Checks deterministas: vacío, longitud, keywords, latencia."),
-            "safety":      ("🛡️", "Safety",      "Detecta prompt injection, filtración del system prompt, contenido dañino."),
-            "ragas":       ("📐", "RAGAS",       "Relevancy, Faithfulness, Context Precision. ⚠️ Requiere OPENAI_API_KEY."),
-            "deepeval":    ("🔍", "DeepEval",    "Hallucination, Bias, Toxicity, GEval. ⚠️ Requiere OPENAI_API_KEY."),
+            "rule_based": ("📏", "Rule-Based", "Checks deterministas: vacío, longitud, keywords, latencia."),
+            "safety": ("🛡️", "Safety", "Detecta prompt injection, filtración del system prompt, contenido dañino."),
+            "ragas": ("📐", "RAGAS", "Relevancy, Faithfulness, Context Precision. ⚠️ Requiere OPENAI_API_KEY."),
+            "deepeval": ("🔍", "DeepEval", "Hallucination, Bias, Toxicity, GEval. ⚠️ Requiere OPENAI_API_KEY."),
             "consistency": ("🔄", "Consistency", "Estabilidad de respuestas: mide variabilidad mediante similitud coseno."),
-            "llm_judge":   ("⚖️", "LLM Judge",  "GPT-4 evalúa según rúbricas personalizadas. ⚠️ Requiere OPENAI_API_KEY."),
+            "llm_judge": ("⚖️", "LLM Judge", "GPT-4 evalúa según rúbricas personalizadas. ⚠️ Requiere OPENAI_API_KEY."),
         }
 
         evals: dict[str, bool] = {}
@@ -238,7 +238,7 @@ def render_sidebar() -> dict:
         st.markdown(
             f"""
             <div style="font-size:0.75rem; color:#64748b; margin-top:0.25rem;">
-                {max_concurrent} tests paralelos · {timeout//1000}s timeout
+                {max_concurrent} tests paralelos · {timeout // 1000}s timeout
             </div>
             """,
             unsafe_allow_html=True,
@@ -278,18 +278,18 @@ def render_sidebar() -> dict:
         )
 
     # Store in session state
-    st.session_state["config"]              = config
-    st.session_state["selected_provider"]   = provider
-    st.session_state["selected_mode"]       = mode
-    st.session_state["active_evaluators"]   = active_evals
-    st.session_state["max_concurrent"]      = max_concurrent
-    st.session_state["timeout_ms"]          = timeout
+    st.session_state["config"] = config
+    st.session_state["selected_provider"] = provider
+    st.session_state["selected_mode"] = mode
+    st.session_state["active_evaluators"] = active_evals
+    st.session_state["max_concurrent"] = max_concurrent
+    st.session_state["timeout_ms"] = timeout
 
     return {
-        "provider":       provider,
-        "mode":           mode,
-        "evaluators":     active_evals,
+        "provider": provider,
+        "mode": mode,
+        "evaluators": active_evals,
         "max_concurrent": max_concurrent,
-        "timeout_ms":     timeout,
-        "config":         config,
+        "timeout_ms": timeout,
+        "config": config,
     }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from src.chatbots.base import BaseRAGChatbot, BaseChatbot, ChatbotResponse
+from src.chatbots.base import BaseChatbot, BaseRAGChatbot, ChatbotResponse
 
 # Pre-defined responses keyed by keywords in the user message
 _MOCK_RESPONSES: dict[str, str] = {
@@ -12,10 +12,7 @@ _MOCK_RESPONSES: dict[str, str] = {
         "Machine learning is a subset of artificial intelligence that enables "
         "systems to learn and improve from experience without being explicitly programmed."
     ),
-    "python": (
-        "Python is a high-level, interpreted programming language known for its "
-        "readability and versatility."
-    ),
+    "python": ("Python is a high-level, interpreted programming language known for its readability and versatility."),
     "capital of france": "The capital of France is Paris.",
     "name": "Your name is Alice, as you mentioned earlier.",
     "default": "I'm a mock chatbot. I can provide basic answers for testing purposes.",

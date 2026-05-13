@@ -5,16 +5,16 @@ from __future__ import annotations
 import os
 import sys
 
-import streamlit as st
 import plotly.graph_objects as go
+import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from src.dashboard.components.sidebar import render_sidebar
-from src.dashboard.components.styles import inject_css, callout, badge, stat_card, page_header
+from src.dashboard.components.charts import COLORS, comparison_bar_chart
 from src.dashboard.components.metrics import severity_icon
-from src.dashboard.components.charts import comparison_bar_chart, COLORS, CATEGORY_COLORS
 from src.dashboard.components.shared import list_runs
+from src.dashboard.components.sidebar import render_sidebar
+from src.dashboard.components.styles import callout, inject_css, page_header
 
 st.set_page_config(page_title="Compare Runs — LLM Eval Lab", page_icon="🔄", layout="wide")
 inject_css()
@@ -49,7 +49,7 @@ if len(runs) < 2:
 
 
 def _label(r: dict) -> str:
-    return f"{r.get('run_id','?')} · {r.get('chatbot_id','?')} ({r.get('chatbot_mode','?')}) · {r.get('timestamp','')[:16]}"
+    return f"{r.get('run_id', '?')} · {r.get('chatbot_id', '?')} ({r.get('chatbot_mode', '?')}) · {r.get('timestamp', '')[:16]}"
 
 
 # ── Run Selection ─────────────────────────────────────────────────────────────
@@ -75,7 +75,14 @@ with sel_col2:
         f"<div style='text-align:center; color:{COLORS['info']}; font-weight:700; margin-bottom:0.4rem;'>🅱 Run B</div>",
         unsafe_allow_html=True,
     )
-    idx_b = st.selectbox("Run B", range(len(runs)), index=min(1, len(runs) - 1), format_func=lambda i: _label(runs[i]), key="cmp_b", label_visibility="collapsed")
+    idx_b = st.selectbox(
+        "Run B",
+        range(len(runs)),
+        index=min(1, len(runs) - 1),
+        format_func=lambda i: _label(runs[i]),
+        key="cmp_b",
+        label_visibility="collapsed",
+    )
 
 if idx_a == idx_b:
     st.markdown(callout("Selecciona dos runs distintos para comparar.", kind="warning"), unsafe_allow_html=True)
@@ -89,7 +96,7 @@ st.divider()
 
 # ── KPI Comparison ────────────────────────────────────────────────────────────
 st.markdown(
-    f"""
+    """
     <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.5rem;">
         📊 Comparación de Indicadores Clave
     </div>
@@ -101,11 +108,11 @@ st.markdown(
 )
 
 kpi_keys = [
-    ("Pass Rate",         "pass_rate",         True,  lambda v: f"{v:.1%}"),
-    ("Avg Score",         "avg_score",          True,  lambda v: f"{v:.3f}"),
-    ("Avg Latency",       "avg_latency_ms",     False, lambda v: f"{v:.0f}ms"),
-    ("Critical Failures", "critical_failures",  False, lambda v: str(int(v))),
-    ("Total Tests",       "total",              None,  lambda v: str(int(v))),
+    ("Pass Rate", "pass_rate", True, lambda v: f"{v:.1%}"),
+    ("Avg Score", "avg_score", True, lambda v: f"{v:.3f}"),
+    ("Avg Latency", "avg_latency_ms", False, lambda v: f"{v:.0f}ms"),
+    ("Critical Failures", "critical_failures", False, lambda v: str(int(v))),
+    ("Total Tests", "total", None, lambda v: str(int(v))),
 ]
 
 kpi_cols = st.columns(len(kpi_keys))
@@ -119,34 +126,34 @@ for i, (name, key, higher_is_better, fmt) in enumerate(kpi_keys):
         diff = vb - va
 
         if higher_is_better is not None and abs(diff) > 0.001:
-            is_b_better  = (diff > 0) == higher_is_better
-            winner       = "B" if is_b_better else "A"
-            arrow        = "↑" if diff > 0 else "↓"
+            is_b_better = (diff > 0) == higher_is_better
+            winner = "B" if is_b_better else "A"
+            arrow = "↑" if diff > 0 else "↓"
             border_color = COLORS["info"] if is_b_better else COLORS["primary"]
-            delta_color  = COLORS["success"] if is_b_better else COLORS["danger"]
+            delta_color = COLORS["success"] if is_b_better else COLORS["danger"]
             if is_b_better:
                 b_wins += 1
             else:
                 a_wins += 1
         else:
-            winner       = "="
-            arrow        = "="
+            winner = "="
+            arrow = "="
             border_color = "#6b7280"
-            delta_color  = COLORS["muted"]
+            delta_color = COLORS["muted"]
 
-        winner_text = f"→ 🅱 gana" if winner == "B" else ("→ 🅰 gana" if winner == "A" else "Empate")
+        winner_text = "→ 🅱 gana" if winner == "B" else ("→ 🅰 gana" if winner == "A" else "Empate")
         st.markdown(
             f"""
             <div class="cmp-card" style="border-left:4px solid {border_color};">
                 <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.4rem;">{name}</div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:0.3rem;">
                     <div style="text-align:center;">
-                        <div style="font-size:0.65rem; color:{COLORS['primary']}; font-weight:700;">🅰 A</div>
-                        <div style="font-size:1.1rem; font-weight:800; color:{COLORS['primary']};">{fmt(va)}</div>
+                        <div style="font-size:0.65rem; color:{COLORS["primary"]}; font-weight:700;">🅰 A</div>
+                        <div style="font-size:1.1rem; font-weight:800; color:{COLORS["primary"]};">{fmt(va)}</div>
                     </div>
                     <div style="text-align:center;">
-                        <div style="font-size:0.65rem; color:{COLORS['info']}; font-weight:700;">🅱 B</div>
-                        <div style="font-size:1.1rem; font-weight:800; color:{COLORS['info']};">{fmt(vb)}</div>
+                        <div style="font-size:0.65rem; color:{COLORS["info"]}; font-weight:700;">🅱 B</div>
+                        <div style="font-size:1.1rem; font-weight:800; color:{COLORS["info"]};">{fmt(vb)}</div>
                     </div>
                 </div>
                 <div style="text-align:center; color:{delta_color}; font-size:0.78rem; font-weight:600;">
@@ -161,12 +168,12 @@ for i, (name, key, higher_is_better, fmt) in enumerate(kpi_keys):
 st.markdown("")
 if a_wins > b_wins:
     st.markdown(
-        callout(f"🅰 <strong>{label_a}</strong> gana {a_wins} de {a_wins+b_wins} métricas comparadas.", kind="tip"),
+        callout(f"🅰 <strong>{label_a}</strong> gana {a_wins} de {a_wins + b_wins} métricas comparadas.", kind="tip"),
         unsafe_allow_html=True,
     )
 elif b_wins > a_wins:
     st.markdown(
-        callout(f"🅱 <strong>{label_b}</strong> gana {b_wins} de {a_wins+b_wins} métricas comparadas.", kind="info"),
+        callout(f"🅱 <strong>{label_b}</strong> gana {b_wins} de {a_wins + b_wins} métricas comparadas.", kind="info"),
         unsafe_allow_html=True,
     )
 else:
@@ -188,7 +195,7 @@ metrics_b.update(run_b.get("deepeval_aggregate", {}))
 
 if metrics_a or metrics_b:
     st.markdown(
-        f"""
+        """
         <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">📐 Comparación de Métricas RAGAS / DeepEval</div>
         <div class="metric-explain" style="margin-bottom:1rem;">
             Compara las métricas avanzadas entre los dos runs. Las diferencias en Faithfulness y Relevancy
@@ -206,23 +213,34 @@ if metrics_a or metrics_b:
     with chart_col2:
         all_metric_names = sorted(set(list(metrics_a.keys()) + list(metrics_b.keys())))
         if all_metric_names:
-            names_closed = all_metric_names + [all_metric_names[0]]
+            names_closed = [*all_metric_names, all_metric_names[0]]
             theta = [n.replace("_", " ").title() for n in names_closed]
             fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(
-                r=[metrics_a.get(m, 0) for m in names_closed], theta=theta,
-                fill="toself", fillcolor="rgba(99, 102, 241, 0.15)",
-                line=dict(color=COLORS["primary"], width=2.5), name=f"🅰 {label_a}",
-                hovertemplate="%{theta}: %{r:.3f}<extra>Run A</extra>",
-            ))
-            fig.add_trace(go.Scatterpolar(
-                r=[metrics_b.get(m, 0) for m in names_closed], theta=theta,
-                fill="toself", fillcolor="rgba(56, 189, 248, 0.15)",
-                line=dict(color=COLORS["info"], width=2.5), name=f"🅱 {label_b}",
-                hovertemplate="%{theta}: %{r:.3f}<extra>Run B</extra>",
-            ))
+            fig.add_trace(
+                go.Scatterpolar(
+                    r=[metrics_a.get(m, 0) for m in names_closed],
+                    theta=theta,
+                    fill="toself",
+                    fillcolor="rgba(99, 102, 241, 0.15)",
+                    line=dict(color=COLORS["primary"], width=2.5),
+                    name=f"🅰 {label_a}",
+                    hovertemplate="%{theta}: %{r:.3f}<extra>Run A</extra>",
+                )
+            )
+            fig.add_trace(
+                go.Scatterpolar(
+                    r=[metrics_b.get(m, 0) for m in names_closed],
+                    theta=theta,
+                    fill="toself",
+                    fillcolor="rgba(56, 189, 248, 0.15)",
+                    line=dict(color=COLORS["info"], width=2.5),
+                    name=f"🅱 {label_b}",
+                    hovertemplate="%{theta}: %{r:.3f}<extra>Run B</extra>",
+                )
+            )
             fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(color=COLORS["text"]),
                 polar=dict(
                     bgcolor="rgba(0,0,0,0)",
@@ -242,15 +260,17 @@ if metrics_a or metrics_b:
         va = metrics_a.get(m)
         vb = metrics_b.get(m)
         diff = (vb or 0) - (va or 0)
-        arrow  = "↑" if diff > 0.001 else ("↓" if diff < -0.001 else "=")
+        arrow = "↑" if diff > 0.001 else ("↓" if diff < -0.001 else "=")
         winner = "🅱 B" if diff > 0.001 else ("🅰 A" if diff < -0.001 else "=")
-        table_data.append({
-            "Métrica":         m.replace("_", " ").title(),
-            f"🅰 {label_a}":  f"{va:.3f}" if va is not None else "—",
-            f"🅱 {label_b}":  f"{vb:.3f}" if vb is not None else "—",
-            "Delta":           f"{arrow} {abs(diff):.3f}",
-            "Ganador":         winner,
-        })
+        table_data.append(
+            {
+                "Métrica": m.replace("_", " ").title(),
+                f"🅰 {label_a}": f"{va:.3f}" if va is not None else "—",
+                f"🅱 {label_b}": f"{vb:.3f}" if vb is not None else "—",
+                "Delta": f"{arrow} {abs(diff):.3f}",
+                "Ganador": winner,
+            }
+        )
     st.dataframe(table_data, use_container_width=True, hide_index=True)
 else:
     st.markdown(
@@ -281,7 +301,7 @@ if all_cats:
     for cat in all_cats:
         a_rate = cats_a.get(cat, {}).get("pass_rate", 0)
         b_rate = cats_b.get(cat, {}).get("pass_rate", 0)
-        icon   = cat_icons.get(cat, "📋")
+        icon = cat_icons.get(cat, "📋")
         winner_hint = "🅰 Gana A" if a_rate > b_rate + 0.02 else ("🅱 Gana B" if b_rate > a_rate + 0.02 else "Empate")
         winner_color = COLORS["primary"] if a_rate > b_rate + 0.02 else (COLORS["info"] if b_rate > a_rate + 0.02 else "#6b7280")
 
@@ -289,7 +309,7 @@ if all_cats:
             f"""
             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
                 <span style="font-size:1rem;">{icon}</span>
-                <span style="font-size:0.9rem; font-weight:600; color:#e2e8f0;">{cat.replace('_',' ').title()}</span>
+                <span style="font-size:0.9rem; font-weight:600; color:#e2e8f0;">{cat.replace("_", " ").title()}</span>
                 <span class="badge" style="background:rgba(99,102,241,0.1); color:{winner_color}; border-color:{winner_color};">{winner_hint}</span>
             </div>
             """,
@@ -338,7 +358,7 @@ if disagreements:
     for tid, ra, rb in disagreements:
         icon_a = "✅" if ra.get("overall_passed") else "❌"
         icon_b = "✅" if rb.get("overall_passed") else "❌"
-        sev    = severity_icon(ra.get("test_case", {}).get("severity", "medium"))
+        sev = severity_icon(ra.get("test_case", {}).get("severity", "medium"))
 
         with st.expander(f"{sev} **{tid}** — 🅰{icon_a} vs 🅱{icon_b}"):
             d_col1, d_col2 = st.columns(2)
@@ -347,11 +367,11 @@ if disagreements:
                 st.markdown(
                     f"""
                     <div style="border-left:3px solid {outcome_color}; padding-left:0.75rem; margin-bottom:0.5rem;">
-                        <div style="font-weight:700; color:{COLORS['primary']};">🅰 {label_a}</div>
-                        <div style="color:{'#22c55e' if ra.get('overall_passed') else '#ef4444'}; font-weight:600;">
-                            {'✅ Passed' if ra.get('overall_passed') else '❌ Failed'}
+                        <div style="font-weight:700; color:{COLORS["primary"]};">🅰 {label_a}</div>
+                        <div style="color:{"#22c55e" if ra.get("overall_passed") else "#ef4444"}; font-weight:600;">
+                            {"✅ Passed" if ra.get("overall_passed") else "❌ Failed"}
                         </div>
-                        <div style="font-size:0.8rem; color:#94a3b8;">Score: {ra.get('overall_score','—')}</div>
+                        <div style="font-size:0.8rem; color:#94a3b8;">Score: {ra.get("overall_score", "—")}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -362,11 +382,11 @@ if disagreements:
                 st.markdown(
                     f"""
                     <div style="border-left:3px solid {outcome_color}; padding-left:0.75rem; margin-bottom:0.5rem;">
-                        <div style="font-weight:700; color:{COLORS['info']};">🅱 {label_b}</div>
-                        <div style="color:{'#22c55e' if rb.get('overall_passed') else '#ef4444'}; font-weight:600;">
-                            {'✅ Passed' if rb.get('overall_passed') else '❌ Failed'}
+                        <div style="font-weight:700; color:{COLORS["info"]};">🅱 {label_b}</div>
+                        <div style="color:{"#22c55e" if rb.get("overall_passed") else "#ef4444"}; font-weight:600;">
+                            {"✅ Passed" if rb.get("overall_passed") else "❌ Failed"}
                         </div>
-                        <div style="font-size:0.8rem; color:#94a3b8;">Score: {rb.get('overall_score','—')}</div>
+                        <div style="font-size:0.8rem; color:#94a3b8;">Score: {rb.get("overall_score", "—")}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,

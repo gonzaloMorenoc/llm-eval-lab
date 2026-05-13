@@ -13,7 +13,6 @@ import pytest
 
 from src.runner.models import TestCase
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -246,9 +245,7 @@ class TestEvaluate:
         mock_metric.single_turn_ascore = AsyncMock(side_effect=RuntimeError("API error"))
 
         with patch.object(evaluator, "_build_metric", return_value=mock_metric):
-            result = await evaluator.evaluate(
-                functional_case, response="Machine learning is AI.", retrieved_contexts=None
-            )
+            result = await evaluator.evaluate(functional_case, response="Machine learning is AI.", retrieved_contexts=None)
         assert "errors" in result.details
         assert len(result.details["errors"]) > 0
 
@@ -258,9 +255,7 @@ class TestEvaluate:
         mock_metric.single_turn_ascore = AsyncMock(return_value=0.85)
 
         with patch.object(evaluator, "_build_metric", return_value=mock_metric):
-            result = await evaluator.evaluate(
-                functional_case, response="Machine learning is AI.", retrieved_contexts=None
-            )
+            result = await evaluator.evaluate(functional_case, response="Machine learning is AI.", retrieved_contexts=None)
         assert result.score is not None
         assert result.score > 0
         assert "metric_scores" in result.details
@@ -272,9 +267,7 @@ class TestEvaluate:
         mock_metric.single_turn_ascore = AsyncMock(return_value=0.1)
 
         with patch.object(evaluator, "_build_metric", return_value=mock_metric):
-            result = await evaluator.evaluate(
-                functional_case, response="Irrelevant answer", retrieved_contexts=None
-            )
+            result = await evaluator.evaluate(functional_case, response="Irrelevant answer", retrieved_contexts=None)
         assert result.passed is False
         assert "FAIL" in result.reason
 
@@ -284,9 +277,7 @@ class TestEvaluate:
         mock_metric.single_turn_ascore = AsyncMock(return_value=0.95)
 
         with patch.object(evaluator, "_build_metric", return_value=mock_metric):
-            result = await evaluator.evaluate(
-                functional_case, response="Great answer", retrieved_contexts=None
-            )
+            result = await evaluator.evaluate(functional_case, response="Great answer", retrieved_contexts=None)
         assert result.passed is True
         assert "PASS" in result.reason
 
@@ -296,9 +287,7 @@ class TestEvaluate:
         mock_metric.single_turn_ascore = AsyncMock(return_value=0.9)
 
         with patch.object(evaluator, "_build_metric", return_value=mock_metric):
-            result = await evaluator.evaluate(
-                multi_turn_case, response="Your name is Alice", retrieved_contexts=None
-            )
+            result = await evaluator.evaluate(multi_turn_case, response="Your name is Alice", retrieved_contexts=None)
         assert result.evaluator == "ragas"
         assert result.score is not None
 
@@ -308,9 +297,7 @@ class TestEvaluate:
         mock_metric.single_turn_ascore = AsyncMock(side_effect=Exception("Total failure"))
 
         with patch.object(evaluator, "_build_metric", return_value=mock_metric):
-            result = await evaluator.evaluate(
-                functional_case, response="test", retrieved_contexts=None
-            )
+            result = await evaluator.evaluate(functional_case, response="test", retrieved_contexts=None)
         assert result.score is None or result.score == 0.0
         assert len(result.details["errors"]) > 0
 
