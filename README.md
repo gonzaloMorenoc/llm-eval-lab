@@ -13,8 +13,8 @@ A comprehensive QA framework for evaluating AI chatbots — functional tests, sa
 - **2 modes**: Plain LLM and RAG (Retrieval-Augmented Generation)
 - **43 test cases** across 4 categories: functional, safety, regression, multi-turn
 - **Interactive dashboard** with Streamlit: run evaluations, explore results, compare runs, manage test cases
-- **Automated CI/CD** with GitHub Actions: ruff lint + format, mypy, pytest matrix on Python 3.11/3.12 with an 80% coverage gate
-- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (88% coverage), HTML-escape guards around dashboard rendering
+- **Automated CI/CD** with GitHub Actions: ruff lint + format, mypy, pytest matrix on Python 3.11/3.12/3.13 with an 80% coverage gate
+- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (89% coverage), secret redaction on everything persisted, HTML-escape guards around dashboard rendering
 
 ## Architecture
 
@@ -86,8 +86,11 @@ llm-eval-lab/
 │   └── llm_judge_rubric.txt     # LLM-as-judge evaluation rubric
 ├── src/
 │   ├── __main__.py              # CLI entry point (python -m src)
+│   ├── config.py                # Cached config.yaml loader
+│   ├── redaction.py             # Secret redaction for persisted output
 │   ├── chatbots/
 │   │   ├── base.py              # BaseChatbot, BaseRAGChatbot, ChatbotResponse
+│   │   ├── errors.py            # ChatbotAPIError preserving provider status codes
 │   │   ├── openai_compatible.py # Universal OpenAI-compatible adapter
 │   │   ├── rag_chatbot.py       # DemoRAGChatbot with ChromaDB
 │   │   └── mock_adapter.py      # MockChatbot, MockRAGChatbot for testing
@@ -109,6 +112,8 @@ llm-eval-lab/
 │       ├── app.py               # Streamlit dashboard entry point
 │       ├── components/
 │       │   ├── sidebar.py       # Global config sidebar
+│       │   ├── shared.py        # Run listing, HTML escaping, shared constants
+│       │   ├── styles.py        # CSS injection and layout primitives
 │       │   ├── charts.py        # Plotly chart components
 │       │   └── metrics.py       # KPI cards and badges
 │       └── pages/
@@ -123,6 +128,8 @@ llm-eval-lab/
 │   ├── test_deepeval_evaluator.py # DeepEval evaluator logic tests
 │   ├── test_models.py           # Pydantic model tests
 │   ├── test_runner.py           # Runner and dataset loading tests
+│   ├── test_runner_errors.py    # Retry, timeout, and error-path tests
+│   ├── test_redaction.py        # Secret redaction tests
 │   └── test_reporting.py        # Report generation tests
 ├── .github/workflows/ci.yml     # CI/CD pipeline (lint + test)
 └── pyproject.toml               # Dependencies, ruff, mypy, pytest config
@@ -146,7 +153,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 254 tests using mock chatbots with coverage report (gate: ≥80%).
+Runs 267 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -168,6 +175,8 @@ cp config/.env.example config/.env
 # Edit config/.env and add your API keys
 
 ACTIVE_PROVIDER=groq python -m src
+# or, after `pip install -e .`:
+ACTIVE_PROVIDER=groq llm-eval-lab
 ```
 
 ### 4. CLI — RAG mode
@@ -202,9 +211,10 @@ Adding a new provider requires only a new block in `config/config.yaml` — zero
 
 Deterministic checks that don't require any LLM:
 - Non-empty response
-- Minimum length (10 chars)
+- Minimum length (`rule_based.min_response_length`, default 10 chars)
 - Key term matching from expected behavior
-- Latency under 30s
+- Latency budget (`rule_based.max_latency_ms`, default 30s) — a quality
+  threshold, distinct from `runner.timeout_ms`, which aborts the request
 - Refusal detection for safety test cases
 
 ### Safety Evaluator
@@ -235,14 +245,14 @@ Requires `OPENAI_API_KEY` for LLM-based metrics (uses `gpt-4o-mini`).
 
 Complementary metrics from the [DeepEval framework](https://docs.confident-ai.com/):
 
-| Metric | What it measures | Mode | Threshold |
-|--------|-----------------|------|-----------|
-| AnswerRelevancy | Response addresses the question | Plain + RAG | 0.7 |
-| Hallucination | Claims beyond retrieved context | RAG only | 0.5 |
-| Bias | Unfair bias in responses | Plain + RAG | 0.5 |
-| Toxicity | Toxic or harmful language | Plain + RAG | 0.5 |
-| Faithfulness | Grounded in retrieved context | RAG only | 0.7 |
-| GEval | Custom generative evaluation | Plain + RAG | 0.6 |
+| Metric | What it measures | Requires Reference | Mode | Threshold |
+|--------|-----------------|--------------------|------|-----------|
+| AnswerRelevancy | Response addresses the question | No | Plain + RAG | 0.7 |
+| Hallucination | Claims beyond retrieved context | No | RAG only | 0.5 |
+| Bias | Unfair bias in responses | No | Plain + RAG | 0.5 |
+| Toxicity | Toxic or harmful language | No | Plain + RAG | 0.5 |
+| Faithfulness | Grounded in retrieved context | No | RAG only | 0.7 |
+| GEval | Custom generative evaluation | Yes | Plain + RAG | 0.6 |
 
 Requires `OPENAI_API_KEY` (uses `gpt-4o-mini`).
 
@@ -384,6 +394,10 @@ Test cases can be added:
 Reports are generated in `results/{run_id}/`:
 
 - **report.json**: Full serialized `RunSummary` for programmatic analysis.
+  Includes `skipped_evaluators` (evaluators a test case asked for that weren't
+  registered — usually a missing API key) and `unevaluated` (cases that ended
+  up with no evaluator at all, which count as failures but were never actually
+  measured).
 - **report.md**: Human-readable Markdown report with:
   - Executive overview (pass rate, avg score, critical failures, latency)
   - RAGAS metrics summary with threshold status
@@ -411,7 +425,7 @@ Reports are generated in `results/{run_id}/`:
 ### Run tests
 
 ```bash
-pytest                          # 123 tests with coverage report
+pytest                          # Full suite with coverage report
 pytest -x                       # Stop on first failure
 pytest tests/test_evaluators.py # Run specific test file
 pytest -k "safety"              # Run tests matching keyword
@@ -435,7 +449,7 @@ mypy src/ --ignore-missing-imports
 
 GitHub Actions runs automatically on push/PR to `main`:
 1. **Lint job**: ruff check + ruff format + mypy
-2. **Test job**: pytest with coverage on Python 3.11 and 3.12
+2. **Test job**: pytest with coverage on Python 3.11, 3.12 and 3.13
 
 ## Adding a New Evaluator
 
@@ -499,7 +513,12 @@ runner:
   max_concurrent: 5          # Parallel test execution
   retry_attempts: 3          # Retry failed API calls
   retry_backoff_base: 2      # Exponential backoff multiplier
-  timeout_ms: 30000          # Per-test timeout
+  timeout_ms: 30000          # Per-request deadline (0 disables it)
+
+# Rule-based evaluator thresholds
+rule_based:
+  min_response_length: 10    # Shorter replies count as empty/truncated
+  max_latency_ms: 30000      # Quality threshold, not a deadline
 
 # RAGAS evaluator config
 ragas:
@@ -550,6 +569,9 @@ rag:
 
 ## Contributing
 
+Contributions are welcome. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup,
+conventions, and how to add an evaluator or provider.
+
 1. Fork the repo and create a feature branch.
 2. Run the full quality gate locally before pushing:
    ```bash
@@ -559,6 +581,10 @@ rag:
    ```
 3. See [CHANGELOG.md](CHANGELOG.md) for the recent history of changes and
    [audits/](audits/) for the latest deep-audit report.
+
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+To report a vulnerability, see [SECURITY.md](SECURITY.md) — please don't open a
+public issue for security problems.
 
 ## License
 

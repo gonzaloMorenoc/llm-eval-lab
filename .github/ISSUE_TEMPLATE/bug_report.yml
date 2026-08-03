@@ -1,0 +1,62 @@
+name: Bug report
+description: Something behaves differently than documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: The smallest sequence of commands or config that shows the problem.
+      placeholder: |
+        1. `ACTIVE_PROVIDER=mock python -m src`
+        2. ...
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Runner
+        - Evaluator — rule-based / safety
+        - Evaluator — RAGAS / DeepEval / LLM judge
+        - Chatbot adapter (provider)
+        - RAG / ChromaDB
+        - Reporting (JSON / Markdown)
+        - Dashboard (Streamlit)
+        - CI / packaging
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      description: Which provider were you evaluating? Behaviour varies a lot between them.
+      placeholder: mock / groq / gemini / mistral / openrouter
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.11.9"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: Relevant traceback or console output. Redact your API keys.
+      render: shell
