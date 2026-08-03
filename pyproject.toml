@@ -45,6 +45,13 @@ dependencies = [
     "openai>=1.0",
     "chromadb>=0.5",
     "langchain-openai>=0.2",
+    # Transitive pin, not a direct dependency. ragas 0.4.3 (its latest) does
+    #     from langchain_community.chat_models.vertexai import ChatVertexAI
+    # in ragas/llms/base.py, and langchain-community 0.4.2 removed that module.
+    # Without this ceiling, `import ragas` raises ModuleNotFoundError on any
+    # fresh install and the RAGAS evaluator is dead on arrival.
+    # Remove once ragas stops importing it.
+    "langchain-community<0.4.2",
 ]
 
 [project.urls]

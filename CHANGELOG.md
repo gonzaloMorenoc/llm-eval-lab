@@ -57,6 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which imports `streamlit` from the `dashboard` extra, so the job died during
   collection on every Python version. Now installs `.[dashboard,dev]`, which
   also means dashboard import errors are finally caught by CI.
+- **A fresh install had a dead RAGAS evaluator.** `ragas` 0.4.3 (its latest)
+  does `from langchain_community.chat_models.vertexai import ChatVertexAI`, a
+  module `langchain-community` 0.4.2 removed, so `import ragas` raised
+  `ModuleNotFoundError` and all 24 RAGAS tests errored during setup. Existing
+  checkouts were unaffected only because they had 0.4.1 installed from before
+  the upstream release. Pinned `langchain-community<0.4.2` until ragas drops
+  the import.
 
 ### Changed
 - CI matrix extended to Python 3.13, with pip caching, `cancel-in-progress`
