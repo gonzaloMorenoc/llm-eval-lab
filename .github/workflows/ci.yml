@@ -48,7 +48,10 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        # The dashboard extra is required: tests/test_dashboard_shared.py imports
+        # src.dashboard.components.shared, which imports streamlit. Without it the
+        # whole test job dies on collection.
+        run: pip install -e ".[dashboard,dev]"
       - name: Run tests with coverage
         run: pytest tests/ --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=80 -v
       - name: Upload coverage report

@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 13 tests covering the request deadline, backoff behaviour, wrapped-error
   classification, config copy semantics, and judge redaction.
 
+- **The CI test job had been failing on `main` since `2da2a53`** — the commit
+  titled "fix CI pipeline". It installed `.[dev]`, but
+  `tests/test_dashboard_shared.py` imports `src.dashboard.components.shared`,
+  which imports `streamlit` from the `dashboard` extra, so the job died during
+  collection on every Python version. Now installs `.[dashboard,dev]`, which
+  also means dashboard import errors are finally caught by CI.
+
 ### Changed
 - CI matrix extended to Python 3.13, with pip caching, `cancel-in-progress`
   concurrency, and a read-only `permissions` block.
