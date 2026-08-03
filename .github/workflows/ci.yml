@@ -52,6 +52,27 @@ jobs:
         # src.dashboard.components.shared, which imports streamlit. Without it the
         # whole test job dies on collection.
         run: pip install -e ".[dashboard,dev]"
+      - name: Report installed versions
+        run: pip list
+      - name: Verify every module imports
+        # A module that fails to import shows up in the test run as a cryptic
+        # "module has no attribute X" from mock.patch, hiding the real
+        # ImportError. Surface it here instead, with the actual traceback.
+        run: |
+          python - <<'PY'
+          import importlib, pkgutil, sys, traceback
+          failed = []
+          for mod in pkgutil.walk_packages(["src"], prefix="src."):
+              if ".dashboard.pages" in mod.name:
+                  continue  # Streamlit pages execute on import by design
+              try:
+                  importlib.import_module(mod.name)
+              except Exception:
+                  failed.append(mod.name)
+                  print(f"\n=== {mod.name} ===", flush=True)
+                  traceback.print_exc()
+          sys.exit(1 if failed else 0)
+          PY
       - name: Run tests with coverage
         run: pytest tests/ --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=80 -v
       - name: Upload coverage report
