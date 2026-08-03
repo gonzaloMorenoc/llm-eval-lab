@@ -53,8 +53,10 @@ def _load_config() -> dict:
 # Metrics that require retrieved_contexts (RAG-only)
 _RAG_ONLY_METRICS = {"hallucination", "faithfulness"}
 
-# Metrics that require a reference answer
-_REFERENCE_REQUIRED = {"answer_relevancy"}
+# Metrics that require a reference answer (DeepEval's ``expected_output``).
+# Only GEval reads it — it is declared in the metric's evaluation_params.
+# AnswerRelevancy scores input-vs-output and must NOT be listed here.
+_REFERENCE_REQUIRED = {"g_eval"}
 
 
 class DeepEvalEvaluator(BaseEvaluator):

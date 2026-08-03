@@ -6,8 +6,8 @@ import asyncio
 import json
 import logging
 import os
-import re
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -16,6 +16,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 
 from src.chatbots.base import BaseChatbot
 from src.evaluators.base import BaseEvaluator
+from src.redaction import summarize_error as _summarize_error
 from src.runner.models import (
     CategoryStats,
     EvaluationResult,
@@ -29,51 +30,51 @@ ChatbotMode = Literal["plain", "rag"]
 console = Console()
 logger = logging.getLogger(__name__)
 
-# Patterns that look like secrets (OpenAI/Anthropic/Groq/etc. API keys, bearer tokens).
-# We never want any of these to land in persisted report.json files.
-_SECRET_PATTERNS = (
-    re.compile(r"sk-[A-Za-z0-9_\-]{12,}"),
-    re.compile(r"gsk_[A-Za-z0-9_\-]{12,}"),
-    re.compile(r"AIza[0-9A-Za-z_\-]{10,}"),
-    re.compile(r"Bearer\s+[A-Za-z0-9._\-]+", re.IGNORECASE),
-    re.compile(r"(?i)api[_-]?key[\"'=:\s]+[A-Za-z0-9_\-]{8,}"),
-)
+# Secret redaction lives in src.redaction so evaluators can reuse it without
+# importing the runner (which would be circular).
+
+_DEFAULT_TIMEOUT_MS = 30_000
 
 
-def _redact_secrets(text: str) -> str:
-    """Strip anything that looks like an API key or bearer token from a string."""
-    for pattern in _SECRET_PATTERNS:
-        text = pattern.sub("[REDACTED]", text)
-    return text
+def _iter_causes(exc: BaseException) -> Iterator[BaseException]:
+    """Yield ``exc`` and every exception it was raised from.
 
-
-def _summarize_error(exc: BaseException, max_len: int = 240) -> str:
-    """Build a short, redacted error string safe to persist in reports."""
-    msg = _redact_secrets(str(exc))
-    if len(msg) > max_len:
-        msg = msg[:max_len] + "…"
-    return f"{type(exc).__name__}: {msg}"
+    Adapters wrap provider SDK errors (see ``ChatbotAPIError``), so the
+    information that decides retryability — the SDK's exception class and its
+    ``status_code`` — lives on ``__cause__``, not on the exception we catch.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        yield current
+        current = current.__cause__ or current.__context__
 
 
 def _is_rate_limit(exc: BaseException) -> bool:
     """Heuristic for rate-limit/quota errors across SDKs."""
-    name = type(exc).__name__.lower()
-    if "ratelimit" in name or "quota" in name:
-        return True
-    status = getattr(exc, "status_code", None)
-    if status == 429:
-        return True
-    text = str(exc).lower()
-    return "429" in text or "rate limit" in text or "rate-limit" in text or "too many requests" in text
+    for err in _iter_causes(exc):
+        name = type(err).__name__.lower()
+        if "ratelimit" in name or "quota" in name:
+            return True
+        if getattr(err, "status_code", None) == 429:
+            return True
+        text = str(err).lower()
+        if "429" in text or "rate limit" in text or "rate-limit" in text or "too many requests" in text:
+            return True
+    return False
 
 
 def _is_network_error(exc: BaseException) -> bool:
     """Heuristic for transient network errors that warrant a retry."""
-    name = type(exc).__name__.lower()
-    if "timeout" in name or "connection" in name or "apiconnection" in name:
-        return True
-    text = str(exc).lower()
-    return "timeout" in text or "timed out" in text or "connection" in text
+    for err in _iter_causes(exc):
+        name = type(err).__name__.lower()
+        if "timeout" in name or "connection" in name or "apiconnection" in name:
+            return True
+        text = str(err).lower()
+        if "timeout" in text or "timed out" in text or "connection" in text:
+            return True
+    return False
 
 
 def _load_config() -> dict:
@@ -137,30 +138,52 @@ class EvalRunner:
         self._retry_attempts = runner_cfg.get("retry_attempts", 3)
         self._retry_backoff_base = runner_cfg.get("retry_backoff_base", 2)
 
+        # A non-positive timeout disables the deadline entirely.
+        timeout_ms = runner_cfg.get("timeout_ms", _DEFAULT_TIMEOUT_MS)
+        self._timeout_s: float | None = timeout_ms / 1000 if timeout_ms and timeout_ms > 0 else None
+
+    async def _complete_with_timeout(self, messages: list[dict]):
+        """Call the chatbot, enforcing the configured per-request deadline.
+
+        Without this, a hung connection holds its semaphore slot forever and
+        stalls the whole run.
+        """
+        if self._timeout_s is None:
+            return await self._chatbot.complete(messages)
+        try:
+            return await asyncio.wait_for(self._chatbot.complete(messages), timeout=self._timeout_s)
+        except TimeoutError as e:
+            raise TimeoutError(f"Chatbot did not respond within {self._timeout_s:.0f}s (runner.timeout_ms)") from e
+
     async def _call_chatbot(self, messages: list[dict]) -> tuple[str, list[str] | None, float, str | None]:
         """Call the chatbot with retry logic for network errors. Returns (content, contexts, latency, error)."""
         last_error = None
+        last_attempt = self._retry_attempts - 1
         for attempt in range(self._retry_attempts):
             try:
-                response = await self._chatbot.complete(messages)
+                response = await self._complete_with_timeout(messages)
                 return response.content, response.retrieved_contexts, response.latency_ms, None
             except Exception as e:
                 # Persisted error stays short and redacted. The full traceback
                 # is only emitted to the application log (server-side).
                 last_error = _summarize_error(e)
-                if _is_rate_limit(e) or _is_network_error(e):
-                    wait = self._retry_backoff_base**attempt
-                    logger.info(
-                        "Retryable error (attempt %d/%d), waiting %ds: %s",
-                        attempt + 1,
-                        self._retry_attempts,
-                        wait,
-                        type(e).__name__,
-                    )
-                    await asyncio.sleep(wait)
-                else:
+                if not (_is_rate_limit(e) or _is_network_error(e)):
                     logger.exception("Non-retryable chatbot error")
                     break
+                if attempt == last_attempt:
+                    # Retries exhausted — sleeping here would only delay the
+                    # inevitable, since the loop ends right after.
+                    logger.warning("Retryable error on final attempt (%d/%d): %s", attempt + 1, self._retry_attempts, type(e).__name__)
+                    break
+                wait = self._retry_backoff_base**attempt
+                logger.info(
+                    "Retryable error (attempt %d/%d), waiting %ss: %s",
+                    attempt + 1,
+                    self._retry_attempts,
+                    wait,
+                    type(e).__name__,
+                )
+                await asyncio.sleep(wait)
         return "", None, 0.0, last_error
 
     async def _run_single(self, test_case: TestCase, semaphore: asyncio.Semaphore) -> TestResult:
@@ -193,9 +216,14 @@ class EvalRunner:
 
             # Run evaluators
             evaluations: list[EvaluationResult] = []
+            skipped: list[str] = []
             for eval_type in test_case.evaluation_type:
                 evaluator = self._evaluators.get(eval_type)
                 if evaluator is None:
+                    # Not registered for this run — usually a missing API key.
+                    # Record it so the case doesn't look plainly failed.
+                    logger.warning("Test case '%s' requested evaluator '%s', which is not registered", test_case.id, eval_type)
+                    skipped.append(eval_type)
                     continue
                 try:
                     eval_result = await evaluator.evaluate(
@@ -219,6 +247,7 @@ class EvalRunner:
                     )
 
             result.evaluations = evaluations
+            result.skipped_evaluators = skipped
             result.overall_passed = all(e.passed for e in evaluations) if evaluations else False
 
             scored = [e.score for e in evaluations if e.score is not None]
@@ -312,6 +341,13 @@ class EvalRunner:
 
         deepeval_aggregate = {m: round(sum(scores) / len(scores), 4) for m, scores in deepeval_scores.items()}
 
+        # Evaluators asked for but never registered, and cases nothing evaluated
+        skipped_evaluators: dict[str, int] = {}
+        for r in results_list:
+            for name in r.skipped_evaluators:
+                skipped_evaluators[name] = skipped_evaluators.get(name, 0) + 1
+        unevaluated = sum(1 for r in results_list if r.error is None and not r.evaluations)
+
         summary = RunSummary(
             run_id=run_id,
             timestamp=timestamp,
@@ -328,6 +364,8 @@ class EvalRunner:
             by_category=by_category,
             ragas_aggregate=ragas_aggregate,
             deepeval_aggregate=deepeval_aggregate,
+            skipped_evaluators=skipped_evaluators,
+            unevaluated=unevaluated,
             results=results_list,
         )
 
@@ -340,5 +378,13 @@ class EvalRunner:
             console.print("  RAGAS scores:", ragas_aggregate)
         if deepeval_aggregate:
             console.print("  DeepEval scores:", deepeval_aggregate)
+        if skipped_evaluators:
+            detail = ", ".join(f"{name} ({count} case{'s' if count != 1 else ''})" for name, count in sorted(skipped_evaluators.items()))
+            console.print(f"\n[yellow]Evaluators requested but not registered:[/yellow] {detail}")
+            if unevaluated:
+                console.print(
+                    f"[yellow]{unevaluated} case(s) ran with no evaluator at all and are counted as failed. "
+                    f"Check that the required API keys are set.[/yellow]"
+                )
 
         return summary

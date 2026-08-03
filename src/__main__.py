@@ -38,7 +38,7 @@ def _build_chatbot(mode: str, provider: str | None):
     return OpenAICompatibleChatbot(provider_name=provider)
 
 
-def _build_evaluators(mode: str, use_llm_judge: bool = False) -> dict:
+def _build_evaluators(use_llm_judge: bool = False) -> dict:
     """Build the set of evaluators to use."""
     evaluators = {
         "rule_based": RuleBasedEvaluator(),
@@ -89,7 +89,7 @@ async def main() -> None:
     console.print(f"  Provider: [cyan]{provider or 'from config.yaml'}[/cyan]")
 
     chatbot = _build_chatbot(mode, provider)
-    evaluators = _build_evaluators(mode, use_llm_judge)
+    evaluators = _build_evaluators(use_llm_judge)
 
     console.print(f"  Chatbot: [cyan]{chatbot.get_id()}[/cyan]")
     console.print(f"  Evaluators: [green]{', '.join(evaluators.keys())}[/green]")
@@ -110,5 +110,10 @@ async def main() -> None:
     console.print(f"  Markdown: {md_path}")
 
 
-if __name__ == "__main__":
+def cli() -> None:
+    """Console-script entry point (``llm-eval-lab``)."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli()
