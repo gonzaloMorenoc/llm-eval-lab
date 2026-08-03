@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose a new evaluator, provider, metric, or capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What can't you measure today
+      description: Describe the QA question the framework currently can't answer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: How would it work? If it's a metric, what does it score and against what?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - New evaluator
+        - New metric in an existing evaluator
+        - New provider
+        - Dashboard capability
+        - Reporting / export
+        - Developer experience
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: Cost and dependencies
+      description: >
+        Does it need an extra LLM call per test case, a new dependency, or an
+        API key? Cheap deterministic checks are easier to land than ones that
+        add per-run cost.
+
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Known limitations
+      description: >
+        Every evaluator in this repo documents where it falls short. What would
+        this one fail to catch?

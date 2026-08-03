@@ -11,6 +11,7 @@ to force a re-read (useful in tests and when the file changes at runtime).
 from __future__ import annotations
 
 import os
+from copy import deepcopy
 from functools import lru_cache
 from typing import Any
 
@@ -28,9 +29,13 @@ def _read_config_file() -> dict[str, Any]:
 def load_config(refresh: bool = False) -> dict[str, Any]:
     """Return the parsed ``config.yaml`` content.
 
-    The result is cached. Pass ``refresh=True`` to invalidate the cache and
-    re-read the file from disk.
+    Parsing is cached, but every caller gets its own deep copy. Handing out the
+    cached dict itself would let any consumer that tweaks a value — the
+    dashboard overriding ``runner.max_concurrent`` for one run, say — silently
+    rewrite the configuration seen by every other component in the process.
+
+    Pass ``refresh=True`` to invalidate the cache and re-read the file.
     """
     if refresh:
         _read_config_file.cache_clear()
-    return _read_config_file()
+    return deepcopy(_read_config_file())

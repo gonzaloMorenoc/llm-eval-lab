@@ -33,7 +33,15 @@ runner:
   max_concurrent: 5
   retry_attempts: 3
   retry_backoff_base: 2
+  # Hard deadline for a single request. The call is aborted and retried.
   timeout_ms: 30000
+
+rule_based:
+  # Shorter replies are treated as empty/truncated rather than terse.
+  min_response_length: 10
+  # Quality threshold, not a deadline: the response arrived, just too slowly.
+  # Keep at or below runner.timeout_ms, which aborts the call outright.
+  max_latency_ms: 30000
 
 ragas:
   evaluator_llm: "gpt-4o-mini"

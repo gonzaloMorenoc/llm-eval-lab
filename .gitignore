@@ -6,6 +6,16 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.deepeval/
 .venv/
+venv/
 .coverage
+coverage.xml
 htmlcov/
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/

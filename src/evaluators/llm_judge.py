@@ -20,7 +20,8 @@ Limitations:
 
 Security:
   User inputs are quoted in the prompt using triple backticks to reduce
-  the risk of prompt injection from test case content.
+  the risk of prompt injection from test case content. Evaluation errors are
+  redacted before they reach the persisted report (see ``src.redaction``).
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from openai import AsyncOpenAI
 
 from src.config import load_config
 from src.evaluators.base import BaseEvaluator
+from src.redaction import summarize_error
 from src.runner.models import EvaluationResult, TestCase
 
 logger = logging.getLogger(__name__)
@@ -127,13 +129,18 @@ class LLMJudgeEvaluator(BaseEvaluator):
                 details={"criteria_scores": scores, "raw_output": raw},
             )
         except Exception as e:
-            logger.error("LLM judge evaluation failed: %s: %s", type(e).__name__, e)
+            # The full exception goes to the log only. What we return here is
+            # persisted verbatim into report.json, so it must be redacted —
+            # provider SDKs routinely echo the failing API key back in the
+            # error message.
+            logger.exception("LLM judge evaluation failed")
+            summary = summarize_error(e)
             return EvaluationResult(
                 evaluator=self.name(),
                 passed=False,
                 score=None,
-                reason=f"LLM judge error: {type(e).__name__}: {e}",
-                details={"error": str(e)},
+                reason=f"LLM judge error: {summary}",
+                details={"error": summary, "error_type": type(e).__name__},
             )
 
     def _parse_scores(self, raw: str) -> dict[str, int]:

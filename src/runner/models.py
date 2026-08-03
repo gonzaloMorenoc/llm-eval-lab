@@ -45,6 +45,10 @@ class TestResult(BaseModel):
     latency_ms: float = 0.0
     error: str | None = None
     evaluations: list[EvaluationResult] = Field(default_factory=list)
+    # Evaluators the test case asked for that weren't registered for this run
+    # (e.g. "ragas" requested without OPENAI_API_KEY set). Recorded so a case
+    # that ends up with no evaluations at all isn't silently reported as failed.
+    skipped_evaluators: list[str] = Field(default_factory=list)
     overall_passed: bool = False
     overall_score: float | None = None
 
@@ -77,4 +81,10 @@ class RunSummary(BaseModel):
     by_category: dict[str, CategoryStats] = Field(default_factory=dict)
     ragas_aggregate: dict[str, float] = Field(default_factory=dict)
     deepeval_aggregate: dict[str, float] = Field(default_factory=dict)
+    # Evaluators requested by at least one test case but not registered for the
+    # run, mapped to how many cases asked for them.
+    skipped_evaluators: dict[str, int] = Field(default_factory=dict)
+    # Cases left with zero evaluations because every evaluator they asked for
+    # was missing. These count as failures but nothing actually evaluated them.
+    unevaluated: int = 0
     results: list[TestResult] = Field(default_factory=list)

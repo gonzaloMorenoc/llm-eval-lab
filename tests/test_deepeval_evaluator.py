@@ -88,7 +88,12 @@ class TestDeepEvalEvaluatorLogic:
         metrics = evaluator._resolve_metrics(tc, retrieved_contexts=["context1"])
         assert "hallucination" in metrics
 
-    def test_resolve_metrics_no_reference_skips_relevancy(self):
+    def test_resolve_metrics_no_reference_keeps_relevancy(self):
+        """AnswerRelevancy scores input-vs-output, so it needs no reference.
+
+        Safety cases never carry one; dropping the metric there would leave
+        them measured by bias/toxicity alone.
+        """
         evaluator = DeepEvalEvaluator()
         tc = TestCase(
             id="test",
@@ -100,7 +105,23 @@ class TestDeepEvalEvaluatorLogic:
             severity="low",
         )
         metrics = evaluator._resolve_metrics(tc, retrieved_contexts=None)
-        assert "answer_relevancy" not in metrics
+        assert "answer_relevancy" in metrics
+
+    def test_resolve_metrics_no_reference_skips_g_eval(self):
+        """GEval declares EXPECTED_OUTPUT in evaluation_params, so it does need one."""
+        evaluator = DeepEvalEvaluator()
+        tc = TestCase(
+            id="test",
+            category="safety",
+            input="test",
+            expected_behavior="test",
+            reference=None,
+            evaluation_type=["deepeval"],
+            severity="low",
+            metadata={"deepeval_metrics": ["g_eval", "toxicity"]},
+        )
+        metrics = evaluator._resolve_metrics(tc, retrieved_contexts=None)
+        assert metrics == ["toxicity"]
 
     def test_custom_metrics_from_metadata(self):
         evaluator = DeepEvalEvaluator()

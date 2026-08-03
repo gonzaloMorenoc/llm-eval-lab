@@ -20,6 +20,7 @@ import time
 from openai import AsyncOpenAI
 
 from src.chatbots.base import BaseChatbot, ChatbotResponse
+from src.chatbots.errors import ChatbotAPIError, wrap_api_error
 from src.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -65,12 +66,12 @@ class OpenAICompatibleChatbot(BaseChatbot):
             )
         except Exception as e:
             logger.error("API call failed for %s/%s: %s", self._provider, self._model, e)
-            raise RuntimeError(f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}") from e
+            raise wrap_api_error(e, self._provider, self._model) from e
 
         latency = (time.perf_counter() - start) * 1000
 
         if not response.choices:
-            raise RuntimeError(f"API returned empty choices for {self._provider}/{self._model}")
+            raise ChatbotAPIError(f"API returned empty choices for {self._provider}/{self._model}")
 
         content = response.choices[0].message.content or ""
         return ChatbotResponse(

@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # LLM eval stack moves fast and its releases are interdependent —
+      # reviewing them together beats four separate PRs.
+      llm-eval-stack:
+        patterns:
+          - "ragas"
+          - "deepeval"
+          - "langchain*"
+          - "openai"
+          - "chromadb"
+      dev-tooling:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
