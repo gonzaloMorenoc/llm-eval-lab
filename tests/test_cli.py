@@ -114,6 +114,11 @@ class TestRunCommand:
         assert "Failed to parse" in result.output
 
 
+def _flat(output: str) -> str:
+    """Collapse rich's console wrapping so message assertions survive the 80-col fold."""
+    return " ".join(output.split())
+
+
 def _do_run(tmp_path, datasets="functional", samples=1):
     """Run the mock provider and return the created run ids (oldest first)."""
     results_dir = tmp_path / "results"
@@ -195,6 +200,22 @@ class TestBaselineSave:
         )
         assert result.exit_code == 2
         assert "same test case ids" in result.output
+
+    def test_save_to_unwritable_baselines_dir_exits_2(self, tmp_path):
+        # F4: save_baseline's os.makedirs/open raise OSError, which was unguarded and
+        # surfaced as a bare traceback with click's generic exit code 1. A regular file
+        # where the baselines directory should be makes makedirs fail deterministically
+        # (no chmod, so the test behaves the same when run as root).
+        results_dir, run_ids = _do_run(tmp_path)
+        blocked = tmp_path / "blocked"
+        blocked.write_text("this is a file, not a directory")
+        result = runner.invoke(
+            app,
+            ["baseline", "save", run_ids[0], "--results-dir", str(results_dir), "--baselines-dir", str(blocked)],
+        )
+        assert result.exit_code == 2, result.output
+        assert "Cannot write baseline file" in _flat(result.output)
+        assert "Baseline saved" not in result.output
 
 
 class TestCompareCommand:
@@ -526,3 +547,101 @@ class TestCheckCommand:
         assert result.exit_code == 2
         assert "Gated metric not comparable" in result.output
         assert "ragas.answer_relevancy" in result.output
+
+    def test_check_with_shrunken_evaluator_set_exits_2(self, tmp_path):
+        # F1: the baseline is built with the default free evaluators (rule_based+safety);
+        # this check runs only rule_based. pass_rate is derived from ALL evaluators, so
+        # dropping one silently redefines the single gated metric. Before the fix this
+        # exited 0 with "Regression gate — ✅ PASS" and an apparent +83pp improvement,
+        # because build_baseline always seeds metric_set with pass_rate and the old
+        # "zero shared metrics" check could therefore never fire.
+        from src.gate.models import BaselineFile
+
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        baseline = BaselineFile.model_validate_json(baseline_path.read_text())
+        assert "safety" in baseline.metric_set, baseline.metric_set
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--evaluators",
+                "rule_based",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 2, result.output
+        flat = _flat(result.output)
+        assert "Metrics missing from the current run: safety" in flat
+        assert "PASS" not in flat  # the gate must not render a verdict at all
+
+    def test_check_provider_outage_exits_2(self, tmp_path, monkeypatch):
+        # F2: the runner never raises on chatbot failure — it records TestResult.error
+        # and counts it in RunSummary.errors, and build_baseline drops both. Without the
+        # explicit check an outage reaches the gate as mass failures, collapsing
+        # pass_rate into exit 1 and blaming the author's change. Spec §3 puts "fallo de
+        # API" under exit 2.
+        from src.gate.models import BaselineFile
+
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        n_cases = len(BaselineFile.model_validate_json(baseline_path.read_text()).cases)
+
+        async def _outage(self, messages, **kwargs):
+            # No "connection"/"timeout"/"rate limit" wording: the runner would classify
+            # those as retryable and sleep through its backoff before giving up.
+            raise RuntimeError("upstream provider returned 503")
+
+        # Patched only after the baseline run, so the outage hits the check's own run.
+        monkeypatch.setattr("src.chatbots.mock_adapter.MockChatbot.complete", _outage)
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 2, result.output
+        flat = _flat(result.output)
+        assert f"Execution errors during evaluation: {n_cases} case(s) got no response." in flat
+        assert "First error: RuntimeError: upstream provider returned 503" in flat
+        assert "Regression gate" not in flat  # bails out before any verdict is computed
+
+    def test_check_unwritable_step_summary_exits_2(self, tmp_path, monkeypatch):
+        # F3: generate_gate_markdown appends to $GITHUB_STEP_SUMMARY. Pointing it at a
+        # path whose parent does not exist raised FileNotFoundError outside any guard,
+        # so the command died with Python's exit code 1 — which CI reads as "regression
+        # detected" — after the gate itself had already passed.
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "no_such_dir" / "summary.md"))
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 2, result.output
+        flat = _flat(result.output)
+        assert "Regression gate" in flat and "PASS" in flat  # the gate itself passed
+        assert "Gate evaluation failed" in flat
+        assert "Gate report:" not in flat  # raised inside generate_gate_markdown

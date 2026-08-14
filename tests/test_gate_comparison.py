@@ -32,10 +32,33 @@ class TestValidateCompatibility:
         with pytest.raises(CompatibilityError, match="chatbot_mode"):
             validate_compatibility(base, curr)
 
-    def test_pass_rate_always_shared(self):
-        # Even with disjoint evaluator metrics, pass_rate exists on both sides.
+    def test_shared_pass_rate_is_not_enough(self):
+        # Used to pass: build_baseline always seeds metric_set with pass_rate, so the
+        # intersection was never empty and a shrunken evaluator set slipped through.
+        # pass_rate is derived from every evaluator, so dropping one changes its meaning.
         base = _baseline({"a": {"rule_based": 1.0}})
         curr = _baseline({"a": {"llm_judge": 0.8}})
+        assert "pass_rate" in set(base.metric_set) & set(curr.metric_set)
+        with pytest.raises(CompatibilityError, match="rule_based"):
+            validate_compatibility(base, curr)
+
+    def test_metric_dropped_by_current_run_raises_and_names_it(self):
+        # The real CI misconfiguration: baseline built with rule_based+safety, current
+        # run only rule_based (e.g. a fork PR without OPENAI_API_KEY dropping RAGAS).
+        base = _baseline({"a": {"rule_based": 1.0, "safety": 1.0}})
+        curr = _baseline({"a": {"rule_based": 1.0}})
+        with pytest.raises(CompatibilityError) as excinfo:
+            validate_compatibility(base, curr)
+        message = str(excinfo.value)
+        assert "safety" in message
+        assert "rule_based" not in message  # only the *missing* metric is named
+
+    def test_extra_metric_in_current_run_is_permitted(self):
+        # The opposite direction fails safe: an added evaluator can only make pass_rate
+        # stricter, which surfaces as exit 1 (a regression someone looks at). An
+        # evaluator that crashes on a single case must not become spurious exit-2 noise.
+        base = _baseline({"a": {"rule_based": 1.0}})
+        curr = _baseline({"a": {"rule_based": 1.0, "safety": 1.0}})
         validate_compatibility(base, curr)  # no raise
 
     def test_zero_shared_metrics_raises(self):

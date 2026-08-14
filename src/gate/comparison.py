@@ -26,6 +26,17 @@ def validate_compatibility(baseline: BaselineFile, current: BaselineFile) -> Non
         raise CompatibilityError(f"chatbot_mode mismatch: baseline={baseline.chatbot_mode}, current={current.chatbot_mode}")
     if not set(baseline.metric_set) & set(current.metric_set):
         raise CompatibilityError("No shared metrics between baseline and current run")
+    # A shared metric_set is not enough: pass_rate (the default gated metric) is derived
+    # from *every* evaluator, so a current run that lost one of the baseline's metrics
+    # measures something weaker under the same name and would gate a green build on it.
+    # The opposite direction (current has extra metrics) fails safe — a stricter
+    # pass_rate surfaces as exit 1 — so extra metrics stay permitted.
+    missing = sorted(set(baseline.metric_set) - set(current.metric_set))
+    if missing:
+        raise CompatibilityError(
+            f"Metrics missing from the current run: {', '.join(missing)}. "
+            f"The evaluator set shrank since the baseline, so its metrics are not comparable."
+        )
 
 
 def pair_cases(baseline: BaselineFile, current: BaselineFile) -> tuple[list[CasePair], list[str], list[str]]:

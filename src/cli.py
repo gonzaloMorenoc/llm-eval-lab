@@ -153,6 +153,23 @@ async def _execute_runs(
     return summaries
 
 
+def _fail_on_execution_errors(summaries: list[RunSummary]) -> None:
+    """Spec §3: an API failure is an execution error (exit 2), never a regression (exit 1).
+
+    The runner does not raise on chatbot failure — it records ``TestResult.error`` and
+    counts it in ``RunSummary.errors``, and ``build_baseline`` drops both fields. Without
+    this check a provider outage reaches the gate as mass case failures, collapses
+    ``pass_rate`` and blames the author's change in the PR report.
+    """
+    total = sum(s.errors for s in summaries)
+    if total == 0:
+        return
+    first_error = next((r.error for s in summaries for r in s.results if r.error), "unknown error")
+    console.print(f"[red]Execution errors during evaluation: {total} case(s) got no response.[/red]")
+    console.print(f"[red]First error: {first_error}[/red]")
+    raise typer.Exit(code=2)
+
+
 def _load_summary(results_dir: str, run_id: str) -> RunSummary:
     """Load a persisted run's report.json as a RunSummary (exit 2 if missing or invalid)."""
     path = os.path.join(results_dir, run_id, "report.json")
@@ -195,10 +212,14 @@ def baseline_save(
     summaries = [_load_summary(results_dir, run_id) for run_id in run_ids]
     try:
         baseline = build_baseline(summaries)
+        path = save_baseline(baseline, os.path.join(baselines_dir, f"{name}.json"))
     except BaselineError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=2) from e
-    path = save_baseline(baseline, os.path.join(baselines_dir, f"{name}.json"))
+    except OSError as e:
+        # A non-writable baselines directory is a config error, not a crash.
+        console.print(f"[red]Cannot write baseline file: {e}[/red]")
+        raise typer.Exit(code=2) from e
     console.print(f"Baseline saved: {path} (samples: {baseline.samples}, cases: {len(baseline.cases)})")
 
 
@@ -257,19 +278,30 @@ def check(
         console.print(f"[red]Evaluation failed: {e}[/red]")
         raise typer.Exit(code=2) from e
 
-    current = build_baseline(summaries)
+    _fail_on_execution_errors(summaries)
+
+    # Everything from here on is inside the exit-code contract: an unexpected failure
+    # (unwritable results dir, unwritable $GITHUB_STEP_SUMMARY, ...) must exit 2, not
+    # leak a traceback with Python's exit code 1, which CI would read as "regression".
     try:
+        current = build_baseline(summaries)
         verdict = evaluate_gate(baseline_file, current, gate_policy)
+        render_gate_console(verdict, console)
+        output_dir = os.path.join(results_dir, summaries[-1].run_id)
+        md_path = generate_gate_markdown(verdict, output_dir)
+        console.print(f"Gate report: {md_path}")
+
+        if verdict.missing_gated_metrics:
+            raise typer.Exit(code=2)
+        if not verdict.passed:
+            raise typer.Exit(code=1)
+    except typer.Exit:
+        # typer.Exit subclasses RuntimeError, so the broad handler below would swallow
+        # the two deliberate exits above and turn them into exit 2.
+        raise
     except CompatibilityError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=2) from e
-
-    render_gate_console(verdict, console)
-    output_dir = os.path.join(results_dir, summaries[-1].run_id)
-    md_path = generate_gate_markdown(verdict, output_dir)
-    console.print(f"Gate report: {md_path}")
-
-    if verdict.missing_gated_metrics:
-        raise typer.Exit(code=2)
-    if not verdict.passed:
-        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[red]Gate evaluation failed: {e}[/red]")
+        raise typer.Exit(code=2) from e
