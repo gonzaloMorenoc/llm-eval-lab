@@ -104,11 +104,7 @@ class TestRunCommand:
         run_dir.mkdir(parents=True)
         # Write malformed JSON to report.json
         (run_dir / "report.json").write_text('{"invalid": json}')
-        result = runner.invoke(
-            app,
-            ["run", "--provider", "mock", "--datasets", "functional", "--results-dir", str(results_dir)],
-        )
-        # Now try to baseline save with the malformed report
+        # Try to baseline save with the malformed report
         result = runner.invoke(
             app,
             ["baseline", "save", run_id, "--results-dir", str(results_dir), "--baselines-dir", str(tmp_path / "baselines")],
@@ -171,6 +167,35 @@ class TestBaselineSave:
         assert result.exit_code == 2
         assert "Run not found" in result.output
 
+    def test_save_mismatched_test_cases_exits_2(self, tmp_path):
+        """Test that combining runs with different test cases triggers BaselineError with exit 2."""
+        results_dir, run_ids = _do_run(tmp_path, datasets="functional", samples=2)
+        # Manually edit one run's report to remove a test case
+        import json
+
+        report_path = results_dir / run_ids[1] / "report.json"
+        report_data = json.loads(report_path.read_text())
+        # Remove the first result to create a mismatch
+        report_data["results"] = report_data["results"][1:]
+        report_path.write_text(json.dumps(report_data))
+
+        # Try to baseline save with runs having different test cases
+        result = runner.invoke(
+            app,
+            [
+                "baseline",
+                "save",
+                run_ids[0],
+                run_ids[1],
+                "--results-dir",
+                str(results_dir),
+                "--baselines-dir",
+                str(tmp_path / "baselines"),
+            ],
+        )
+        assert result.exit_code == 2
+        assert "same test case ids" in result.output
+
 
 class TestCompareCommand:
     def test_compare_two_runs_renders_table(self, tmp_path):
@@ -184,3 +209,58 @@ class TestCompareCommand:
         results_dir, run_ids = _do_run(tmp_path)
         result = runner.invoke(app, ["compare", run_ids[0], "ghost", "--results-dir", str(results_dir)])
         assert result.exit_code == 2
+        assert "Run not found" in result.output
+
+    def test_compare_incompatible_chatbot_modes_exits_2(self, tmp_path):
+        """Test that comparing plain vs rag mode runs triggers CompatibilityError with exit 2."""
+        results_dir = tmp_path / "results"
+        # Run in plain mode (default)
+        args_plain = ["run", "--provider", "mock", "--datasets", "functional", "--results-dir", str(results_dir)]
+        result = runner.invoke(app, args_plain)
+        assert result.exit_code == 0, result.output
+        plain_run_ids = sorted(os.listdir(results_dir))
+        # Run in rag mode
+        args_rag = [
+            "run",
+            "--provider",
+            "mock",
+            "--mode",
+            "rag",
+            "--datasets",
+            "functional",
+            "--results-dir",
+            str(results_dir),
+        ]
+        result = runner.invoke(app, args_rag)
+        assert result.exit_code == 0, result.output
+        rag_run_ids = sorted(os.listdir(results_dir))
+        # Identify the new rag run
+        new_run = next(rid for rid in rag_run_ids if rid not in plain_run_ids)
+        # Try to compare plain vs rag
+        result = runner.invoke(
+            app,
+            ["compare", plain_run_ids[0], new_run, "--results-dir", str(results_dir)],
+        )
+        assert result.exit_code == 2
+        assert "chatbot_mode" in result.output
+
+    def test_compare_failing_verdict_still_exits_0(self, tmp_path):
+        """Test that compare exits 0 even when verdict fails (no special gating)."""
+        results_dir, run_ids = _do_run(tmp_path, datasets="functional", samples=2)
+        # Hand-edit one run to flip a critical case from passed to failed
+        import json
+
+        report_path = results_dir / run_ids[1] / "report.json"
+        report_data = json.loads(report_path.read_text())
+        # Find and flip a critical case
+        for result in report_data["results"]:
+            if result["test_case"]["severity"] == "critical":
+                result["overall_passed"] = not result["overall_passed"]
+                break
+        report_path.write_text(json.dumps(report_data))
+
+        result = runner.invoke(app, ["compare", run_ids[0], run_ids[1], "--results-dir", str(results_dir)])
+        # Even with a failing verdict, compare should exit 0 and render the table
+        assert result.exit_code == 0, result.output
+        assert "Current" in result.output
+        assert "Regression gate" in result.output
