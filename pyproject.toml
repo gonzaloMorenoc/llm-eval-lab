@@ -37,6 +37,9 @@ dev = [
     "mypy>=1.10",
 ]
 
+[project.scripts]
+llm-eval-lab = "src.__main__:main"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -78,6 +81,7 @@ ignore = [
 "tests/**" = ["S101", "S106", "B017", "RUF043"]
 "src/dashboard/pages/**" = ["E402"]  # Streamlit pages must call set_page_config first
 "src/chatbots/mock_adapter.py" = ["S311"]  # mock-only random latency, not crypto
+"src/cli.py" = ["B008"]  # typer.Option/Argument as parameter defaults is the Typer idiom
 
 [tool.mypy]
 python_version = "3.11"
