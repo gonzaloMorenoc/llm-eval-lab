@@ -59,11 +59,11 @@ class TestConsoleReporter:
         render_gate_console(_verdict(passed=False), console)
         output = console.export_text()
         # Fixture has baseline=0.9, current=0.8, regression=0.1, ci_low=0.02, ci_high=0.18, p_value=0.01, gated=yes, breaches=regression
-        assert "0.9000" in output  # baseline
-        assert "0.8000" in output  # current
+        # Pin baseline before current via index ordering to catch transposition (F2)
+        assert output.index("0.9000") < output.index("0.8000")
         assert "+0.1000" in output  # regression (signed)
-        assert "0.0200" in output  # ci_low
-        assert "0.1800" in output  # ci_high
+        # Pin CI bounds as complete bracket to catch ci_low/ci_high swap (F2)
+        assert "[+0.0200, +0.1800]" in output
         assert "0.0100" in output  # p_value
         assert "yes" in output  # gated
         assert "❌ regression" in output  # breaches icon
@@ -122,14 +122,9 @@ class TestMarkdownReporter:
         path = generate_gate_markdown(_verdict(passed=False), str(tmp_path))
         content = open(path).read()
         # Fixture: baseline=0.9, current=0.8, regression=0.1, ci_low=0.02, ci_high=0.18, p_value=0.01, gated=yes, breaches=regression
-        assert "0.9000" in content  # baseline
-        assert "0.8000" in content  # current
-        assert "+0.1000" in content  # regression (signed)
-        assert "0.0200" in content  # ci_low
-        assert "0.1800" in content  # ci_high
-        assert "0.0100" in content  # p_value
-        assert "| yes |" in content  # gated column
-        assert "❌ regression" in content  # breaches icon
+        # Assert exact row to catch baseline/current transposition, ci_low/ci_high swap, and icon inversion (F2)
+        expected_row = "| pass_rate | 0.9000 | 0.8000 | +0.1000 | [+0.0200, +0.1800] | 0.0100 | yes | ❌ regression |"
+        assert expected_row in content
 
     def test_markdown_non_breaching_verdict_icon(self, tmp_path):
         """Verify ✅ ok icon for non-breaching metrics (F2)."""
