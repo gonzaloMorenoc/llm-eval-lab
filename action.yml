@@ -45,9 +45,17 @@ runs:
       env:
         ACTIVE_PROVIDER: ${{ inputs.provider }}
         CHATBOT_MODE: ${{ inputs.mode }}
+        GATE_BASELINE: ${{ inputs.baseline }}
+        GATE_SAMPLES: ${{ inputs.samples }}
+        GATE_EVALUATORS: ${{ inputs.evaluators }}
+        GATE_DATASETS: ${{ inputs.datasets }}
+        GATE_POLICY: ${{ inputs.policy }}
+      # Inputs are passed via `env:` and read as quoted shell variables (never
+      # interpolated directly into the script) so a crafted input value cannot
+      # inject arbitrary shell commands.
       run: |
-        ARGS=(check --baseline "${{ inputs.baseline }}" --samples "${{ inputs.samples }}")
-        if [ -n "${{ inputs.evaluators }}" ]; then ARGS+=(--evaluators "${{ inputs.evaluators }}"); fi
-        if [ -n "${{ inputs.datasets }}" ]; then ARGS+=(--datasets "${{ inputs.datasets }}"); fi
-        if [ -n "${{ inputs.policy }}" ]; then ARGS+=(--policy "${{ inputs.policy }}"); fi
+        ARGS=(check --baseline "$GATE_BASELINE" --samples "$GATE_SAMPLES")
+        if [ -n "$GATE_EVALUATORS" ]; then ARGS+=(--evaluators "$GATE_EVALUATORS"); fi
+        if [ -n "$GATE_DATASETS" ]; then ARGS+=(--datasets "$GATE_DATASETS"); fi
+        if [ -n "$GATE_POLICY" ]; then ARGS+=(--policy "$GATE_POLICY"); fi
         llm-eval-lab "${ARGS[@]}"

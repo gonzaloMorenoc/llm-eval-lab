@@ -414,7 +414,15 @@ st.subheader("📐 Comparación estadística")
 
 
 def _full_summary(run: dict) -> RunSummary:
-    """Load the complete RunSummary for a run dict coming from list_runs()."""
+    """Load the complete RunSummary for a run dict coming from list_runs().
+
+    ``list_runs()`` currently always returns the full persisted report (it reads
+    each run's ``report.json`` in full, so ``results`` is always present), which
+    makes the disk-read fallback below unreachable today. It is deliberate
+    defensive code, not dead code: it guards against a future ``list_runs()``
+    that returns a lighter-weight view (e.g. summary fields only, for a faster
+    run-listing UI) without ``results``. Keep it.
+    """
     if run.get("results"):
         return RunSummary.model_validate(run)
     path = os.path.join(RESULTS_DIR, run.get("run_id", ""), "report.json")

@@ -45,6 +45,13 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+  # gate-dogfood is an end-to-end plumbing test only (install -> run -> gate
+  # computation -> exit code) — it is NOT a regression detector. The committed
+  # mock baseline has a 7% pass rate (3 of 43 cases), and all 7 critical-severity
+  # cases already fail in it, so the no_new_critical_failures hard rule can never
+  # fire here for any future change; the only gated metric (pass_rate) has just
+  # those 3 passing cases as its entire headroom. A green run here proves the
+  # plumbing works, not that a real regression would be caught.
   gate-dogfood:
     runs-on: ubuntu-latest
     needs: lint
@@ -55,4 +62,5 @@ jobs:
         with:
           provider: mock
           baseline: tests/fixtures/baseline_mock.json
+          samples: "3"
           evaluators: rule_based,safety
