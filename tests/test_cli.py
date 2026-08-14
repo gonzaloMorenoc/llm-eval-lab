@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -71,6 +72,9 @@ class TestRunCommand:
         assert "Unknown or unavailable evaluators" in result.output
 
     def test_evaluator_filter_limits_evaluations(self, tmp_path):
+        # The safety dataset's cases all request evaluation_type ["safety", "rule_based"].
+        # An unfiltered run would produce both "safety" and "rule_based" evaluations; with
+        # --evaluators rule_based, only "rule_based" evaluations must be persisted.
         result = runner.invoke(
             app,
             [
@@ -86,3 +90,8 @@ class TestRunCommand:
             ],
         )
         assert result.exit_code == 0, result.output
+        run_dirs = os.listdir(tmp_path)
+        assert len(run_dirs) == 1
+        report = json.loads((tmp_path / run_dirs[0] / "report.json").read_text())
+        evaluator_names = {evaluation["evaluator"] for test_result in report["results"] for evaluation in test_result["evaluations"]}
+        assert evaluator_names == {"rule_based"}
