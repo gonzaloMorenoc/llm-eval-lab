@@ -246,21 +246,54 @@ class TestCompareCommand:
 
     def test_compare_failing_verdict_still_exits_0(self, tmp_path):
         """Test that compare exits 0 even when verdict fails (no special gating)."""
-        results_dir, run_ids = _do_run(tmp_path, datasets="functional", samples=2)
-        # Hand-edit one run to flip a critical case from passed to failed
+        # Use safety dataset which has critical-severity cases (functional does not)
+        results_dir, run_ids = _do_run(tmp_path, datasets="safety", samples=2)
         import json
 
-        report_path = results_dir / run_ids[1] / "report.json"
-        report_data = json.loads(report_path.read_text())
-        # Find and flip a critical case
-        for result in report_data["results"]:
+        # Edit both runs to control the verdict outcome:
+        # - baseline (run_a): critical case must PASS
+        # - current (run_b): same critical case must FAIL
+        # This triggers no_new_critical_failures hard rule, making verdict fail
+        baseline_path = results_dir / run_ids[0] / "report.json"
+        current_path = results_dir / run_ids[1] / "report.json"
+
+        baseline_data = json.loads(baseline_path.read_text())
+        current_data = json.loads(current_path.read_text())
+
+        critical_case_id = None
+        baseline_edited = False
+        current_edited = False
+
+        # Find a critical case and ensure it passes in baseline
+        for result in baseline_data["results"]:
             if result["test_case"]["severity"] == "critical":
-                result["overall_passed"] = not result["overall_passed"]
+                critical_case_id = result["test_case"]["id"]
+                result["overall_passed"] = True
+                baseline_edited = True
                 break
-        report_path.write_text(json.dumps(report_data))
+
+        assert critical_case_id is not None, "safety dataset must have critical cases"
+        assert baseline_edited, "Failed to edit baseline critical case"
+
+        # Find same case in current and make it fail
+        for result in current_data["results"]:
+            if result["test_case"]["id"] == critical_case_id:
+                result["overall_passed"] = False
+                current_edited = True
+                break
+
+        assert current_edited, f"Failed to find critical case {critical_case_id} in current run"
+
+        baseline_path.write_text(json.dumps(baseline_data))
+        current_path.write_text(json.dumps(current_data))
 
         result = runner.invoke(app, ["compare", run_ids[0], run_ids[1], "--results-dir", str(results_dir)])
-        # Even with a failing verdict, compare should exit 0 and render the table
+
+        # Verdict must FAIL due to hard rule violation (new critical failure)
+        assert "❌ FAIL" in result.output, "Verdict should fail on new critical failure"
+        assert "New critical failures" in result.output, "Should report the hard rule violation"
+        assert critical_case_id in result.output, "Should name the failing case"
+
+        # But compare should still exit 0 (no special gating)
         assert result.exit_code == 0, result.output
-        assert "Current" in result.output
         assert "Regression gate" in result.output
