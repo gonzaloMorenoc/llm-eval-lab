@@ -6,7 +6,7 @@ import pytest
 
 from src.gate.baseline import build_baseline
 from src.gate.comparison import CompatibilityError
-from src.gate.models import GatePolicy, HardRules, MetricPolicy
+from src.gate.models import BaselineCase, BaselineFile, GatePolicy, HardRules, MetricPolicy
 from src.gate.policy import PolicyError, evaluate_gate, load_policy
 from tests.gate_helpers import make_summary
 
@@ -103,3 +103,79 @@ class TestEvaluateGate:
         curr = _baseline({"a": {"rule_based": 1.0}}, chatbot_mode="rag")
         with pytest.raises(CompatibilityError):
             evaluate_gate(base, curr, GatePolicy())
+
+    def test_non_critical_failure_does_not_violate_hard_rule(self):
+        # F1 fix: verify that only CRITICAL cases trigger the hard rule
+        base = _baseline(
+            {
+                "critical_case": {"rule_based": 1.0},
+                "high_case": {"rule_based": 1.0},
+            },
+            passed={"critical_case": True, "high_case": True},
+            severities={"critical_case": "critical", "high_case": "high"},
+        )
+        curr = _baseline(
+            {
+                "critical_case": {"rule_based": 1.0},
+                "high_case": {"rule_based": 1.0},
+            },
+            passed={"critical_case": True, "high_case": False},
+            severities={"critical_case": "critical", "high_case": "high"},
+        )
+        verdict = evaluate_gate(base, curr, GatePolicy())
+        assert verdict.passed is True
+        assert verdict.hard_rule_violations == []
+
+    def test_missing_gated_metric_when_not_compared(self):
+        # F2 fix: metric in metric_set but not compared (missing on one side)
+        base_case = BaselineCase(
+            id="a",
+            category="test",
+            severity="high",
+            passed=True,
+            pass_samples=[True],
+            metrics={"rule_based": 0.9, "answer_relevancy": 0.8},
+        )
+        base = BaselineFile(
+            schema_version=1,
+            run_ids=["run1"],
+            timestamp="2026-08-14T00:00:00Z",
+            chatbot_id="test",
+            chatbot_mode="plain",
+            dataset_hash="hash1",
+            metric_set=["rule_based", "answer_relevancy"],
+            cases=[base_case],
+        )
+        # Current run has answer_relevancy in metric_set but NOT in the case metrics
+        curr_case = BaselineCase(
+            id="a",
+            category="test",
+            severity="high",
+            passed=True,
+            pass_samples=[True],
+            metrics={"rule_based": 0.9},  # answer_relevancy missing
+        )
+        curr = BaselineFile(
+            schema_version=1,
+            run_ids=["run2"],
+            timestamp="2026-08-14T00:00:00Z",
+            chatbot_id="test",
+            chatbot_mode="plain",
+            dataset_hash="hash1",
+            metric_set=["rule_based", "answer_relevancy"],
+            cases=[curr_case],
+        )
+        policy = GatePolicy(metrics={"answer_relevancy": MetricPolicy(max_regression=0.1)})
+        verdict = evaluate_gate(base, curr, policy)
+        assert verdict.missing_gated_metrics == ["answer_relevancy"]
+        assert verdict.passed is False
+
+    def test_loads_yaml_without_gate_key(self, tmp_path):
+        # F3 fix: flat YAML structure (no top-level gate: key)
+        path = tmp_path / "gate.yaml"
+        path.write_text("significance_level: 0.02\nmetrics:\n  rule_based: {max_regression: 0.15}\nnew_cases: fail\n")
+        policy = load_policy(str(path))
+        assert policy.significance_level == 0.02
+        assert policy.metrics == {"rule_based": MetricPolicy(max_regression=0.15)}
+        assert policy.new_cases == "fail"
+        assert policy.min_effect_size == 0.05  # default preserved
