@@ -134,17 +134,25 @@ llm-eval-lab/
 │   ├── gate_helpers.py          # Synthetic RunSummary builders for gate tests
 │   ├── test_chatbots.py         # Chatbot adapter tests
 │   ├── test_cli.py              # CLI tests (typer's CliRunner, mock provider)
-│   ├── test_evaluators.py       # Evaluator tests (rule-based, safety, consistency)
+│   ├── test_config.py           # Config loader tests (LRU cache correctness)
+│   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs())
 │   ├── test_deepeval_evaluator.py # DeepEval evaluator logic tests
+│   ├── test_evaluators.py       # Evaluator tests (rule-based, safety, consistency)
 │   ├── test_gate_baseline.py    # Baseline build/hash/save/load tests
 │   ├── test_gate_comparison.py  # Case pairing and per-metric comparison tests
 │   ├── test_gate_models.py      # Gate Pydantic model tests
 │   ├── test_gate_policy.py      # Policy loading and full gate-evaluation tests
 │   ├── test_gate_reporter.py    # Gate console and Markdown reporter tests
 │   ├── test_gate_statistics.py  # Bootstrap and flakiness tests (seeded, deterministic)
+│   ├── test_llm_judge_evaluator.py # LLM Judge evaluator tests (score parsing, sanitization)
 │   ├── test_models.py           # Pydantic model tests
+│   ├── test_openai_chatbot.py   # OpenAICompatibleChatbot tests (key validation, error handling)
+│   ├── test_rag_chatbot.py      # DemoRAGChatbot tests (knowledge base loading, retrieval)
+│   ├── test_ragas_evaluator.py  # RAGAS evaluator tests (metric resolution, config logic)
+│   ├── test_reporting.py        # Report generation tests
 │   ├── test_runner.py           # Runner and dataset loading tests
-│   └── test_reporting.py        # Report generation tests
+│   ├── test_runner_errors.py    # Runner error-path tests (retries, malformed datasets, evaluator failures)
+│   └── test_runner_safety_helpers.py # Secret redaction and error-classification helper tests
 ├── .github/workflows/ci.yml     # CI/CD pipeline (lint, test, gate-dogfood)
 └── pyproject.toml               # Dependencies, ruff, mypy, pytest config
 ```
@@ -361,12 +369,14 @@ Policy reference: [`config/gate.yaml`](config/gate.yaml).
 ```
 
 Without `OPENAI_API_KEY` set as `env` on the step (same pattern as `GROQ_API_KEY`
-above), only the free evaluators run (rule-based, safety); RAGAS activates
-automatically once the key is present, and DeepEval/LLM-judge additionally need
-`USE_DEEPEVAL=true` / `USE_LLM_JUDGE=true`. The `evaluators` input further narrows
-which of those registered evaluators actually run. `check` prints an API-call
-estimate before running, and writes `gate_report.md` (also to
-`$GITHUB_STEP_SUMMARY`) ready to paste as a PR comment.
+above), only the free evaluators run (rule-based, safety). RAGAS activates
+automatically once `OPENAI_API_KEY` is present; DeepEval additionally needs
+`USE_DEEPEVAL=true`. LLM-judge is independent of `OPENAI_API_KEY` — it only needs
+`USE_LLM_JUDGE=true` and reuses whichever provider key the chatbot itself is
+already configured with (e.g. `GROQ_API_KEY` in the example above). The
+`evaluators` input further narrows which of those registered evaluators actually
+run. `check` prints an API-call estimate before running, and writes
+`gate_report.md` (also to `$GITHUB_STEP_SUMMARY`) ready to paste as a PR comment.
 
 This repository's own `gate-dogfood` CI job (see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs this Action on every
