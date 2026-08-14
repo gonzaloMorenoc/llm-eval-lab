@@ -85,6 +85,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 
 
 ### Added
+- Regression quality gate for CI/CD: `src/gate/` (paired bootstrap statistics,
+  baseline build/load, case pairing, policy + verdict), `llm-eval-lab` CLI with
+  `run` / `baseline save` / `check` / `compare` subcommands (exit codes 0/1/2),
+  `gate_report.md` + `$GITHUB_STEP_SUMMARY` output, composite GitHub Action
+  (`action.yml`) with a mock-baseline dogfooding job in CI, statistical section
+  in the Compare Runs dashboard page, and `config/gate.yaml` policy reference.
+- `MockChatbot`/`MockRAGChatbot` accept an optional `transform` callable to
+  simulate response drift in gate tests.
 - `src/config.py` — process-wide LRU-cached YAML loader. Replaces 8 duplicated
   `_load_config()` helpers and avoids re-parsing `config.yaml` on every
   evaluator/chatbot/report constructor.

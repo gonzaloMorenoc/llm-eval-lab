@@ -12,9 +12,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.dashboard.components.charts import COLORS, comparison_bar_chart
 from src.dashboard.components.metrics import severity_icon
-from src.dashboard.components.shared import list_runs
+from src.dashboard.components.shared import RESULTS_DIR, list_runs
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import callout, inject_css, page_header
+from src.gate.baseline import build_baseline
+from src.gate.models import GatePolicy
+from src.gate.policy import evaluate_gate
+from src.runner.models import RunSummary
 
 st.set_page_config(page_title="Compare Runs — LLM Eval Lab", page_icon="🔄", layout="wide")
 inject_css()
@@ -403,3 +407,53 @@ else:
             callout("No hay tests comunes entre los runs seleccionados.", kind="info"),
             unsafe_allow_html=True,
         )
+
+# ── Statistical comparison (gate engine) ──────────────────────────────────────
+st.divider()
+st.subheader("📐 Comparación estadística")
+
+
+def _full_summary(run: dict) -> RunSummary:
+    """Load the complete RunSummary for a run dict coming from list_runs().
+
+    ``list_runs()`` currently always returns the full persisted report (it reads
+    each run's ``report.json`` in full, so ``results`` is always present), which
+    makes the disk-read fallback below unreachable today. It is deliberate
+    defensive code, not dead code: it guards against a future ``list_runs()``
+    that returns a lighter-weight view (e.g. summary fields only, for a faster
+    run-listing UI) without ``results``. Keep it.
+    """
+    if run.get("results"):
+        return RunSummary.model_validate(run)
+    path = os.path.join(RESULTS_DIR, run.get("run_id", ""), "report.json")
+    with open(path) as f:
+        return RunSummary.model_validate_json(f.read())
+
+
+try:
+    _verdict = evaluate_gate(
+        build_baseline([_full_summary(run_a)]),
+        build_baseline([_full_summary(run_b)]),
+        GatePolicy(),
+    )
+    st.dataframe(
+        [
+            {
+                "Métrica": c.metric,
+                "A (baseline)": round(c.baseline_mean, 4),
+                "B (actual)": round(c.current_mean, 4),
+                "Regresión": round(c.regression, 4),
+                "IC 95%": f"[{c.ci_low:+.4f}, {c.ci_high:+.4f}]",
+                "p-valor": round(c.p_value, 4),
+                "Significativa": "sí" if c.significant else "no",
+            }
+            for c in _verdict.comparisons
+        ],
+        use_container_width=True,
+    )
+    st.caption(
+        "Bootstrap pareado por caso: B como run actual frente a A como baseline. "
+        "Con 1 muestra por caso la potencia estadística es baja; usa `--samples 3` o más en la CLI."
+    )
+except Exception as e:
+    st.info(f"Comparación estadística no disponible para estos runs: {e}")

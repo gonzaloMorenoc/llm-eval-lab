@@ -103,3 +103,21 @@ class TestMockRAGChatbot:
         messages = [{"role": "user", "content": "What is Python?"}]
         response = await mock_rag_chatbot.complete(messages)
         assert all(isinstance(ctx, str) for ctx in response.retrieved_contexts)
+
+
+class TestMockTransform:
+    async def test_transform_applies_to_plain_mock(self):
+        bot = MockChatbot(transform=lambda text: text[:5])
+        response = await bot.complete([{"role": "user", "content": "What is machine learning?"}])
+        assert len(response.content) == 5
+
+    async def test_transform_applies_to_rag_mock(self):
+        bot = MockRAGChatbot(transform=lambda text: text + " EXTRA")
+        response = await bot.complete([{"role": "user", "content": "What is python?"}])
+        assert response.content.endswith(" EXTRA")
+        assert response.retrieved_contexts  # retrieval untouched
+
+    async def test_no_transform_keeps_default_behavior(self):
+        bot = MockChatbot()
+        response = await bot.complete([{"role": "user", "content": "capital of france"}])
+        assert response.content == "The capital of France is Paris."

@@ -13,8 +13,9 @@ A comprehensive QA framework for evaluating AI chatbots — functional tests, sa
 - **2 modes**: Plain LLM and RAG (Retrieval-Augmented Generation)
 - **43 test cases** across 4 categories: functional, safety, regression, multi-turn
 - **Interactive dashboard** with Streamlit: run evaluations, explore results, compare runs, manage test cases
+- **Regression gate for CI/CD**: `llm-eval-lab check` compares a run against a committed baseline with paired bootstrap statistics and breaks the build on significant regressions; reusable GitHub Action included
 - **Automated CI/CD** with GitHub Actions: ruff lint + format, mypy, pytest matrix on Python 3.11/3.12/3.13 with an 80% coverage gate
-- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (89% coverage), secret redaction on everything persisted, HTML-escape guards around dashboard rendering
+- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (91% coverage), secret redaction on everything persisted, HTML-escape guards around dashboard rendering
 
 ## Architecture
 
@@ -73,8 +74,10 @@ graph TD
 
 ```
 llm-eval-lab/
+├── action.yml                   # Composite GitHub Action: run the CLI and gate on regressions
 ├── config/
 │   ├── config.yaml              # Providers, runner, RAGAS, DeepEval, consistency config
+│   ├── gate.yaml                # Regression gate policy (thresholds, hard rules)
 │   └── .env.example             # API key template
 ├── datasets/
 │   ├── functional.jsonl         # 13 functional capability tests
@@ -86,6 +89,7 @@ llm-eval-lab/
 │   └── llm_judge_rubric.txt     # LLM-as-judge evaluation rubric
 ├── src/
 │   ├── __main__.py              # CLI entry point (python -m src)
+│   ├── cli.py                   # Typer CLI: run / baseline save / check / compare
 │   ├── config.py                # Cached config.yaml loader
 │   ├── redaction.py             # Secret redaction for persisted output
 │   ├── chatbots/
@@ -102,12 +106,19 @@ llm-eval-lab/
 │   │   ├── deepeval_evaluator.py# DeepEval metrics (hallucination, bias, toxicity)
 │   │   ├── consistency.py       # Response stability measurement
 │   │   └── llm_judge.py         # LLM-as-judge with rubric scoring
+│   ├── gate/
+│   │   ├── models.py            # Pydantic models: baselines, comparisons, policy, verdict
+│   │   ├── statistics.py        # Paired bootstrap and flakiness (pure functions)
+│   │   ├── baseline.py          # Build/save/load baselines from run summaries
+│   │   ├── comparison.py        # Pair cases by id and compute per-metric statistical comparisons
+│   │   └── policy.py            # Load a gate policy YAML and evaluate the final verdict
 │   ├── runner/
 │   │   ├── models.py            # Pydantic models (TestCase, RunSummary, etc.)
 │   │   └── runner.py            # Async orchestrator with retry logic
 │   ├── reporting/
 │   │   ├── json_reporter.py     # JSON report generator
-│   │   └── markdown_reporter.py # Markdown report generator
+│   │   ├── markdown_reporter.py # Markdown report generator
+│   │   └── gate_reporter.py     # Gate verdict: rich console table + gate_report.md (+ $GITHUB_STEP_SUMMARY)
 │   └── dashboard/
 │       ├── app.py               # Streamlit dashboard entry point
 │       ├── components/
@@ -119,19 +130,36 @@ llm-eval-lab/
 │       └── pages/
 │           ├── 1_run.py         # Run Evaluation page
 │           ├── 2_results.py     # Results Dashboard page
-│           ├── 3_compare.py     # Compare Runs page
+│           ├── 3_compare.py     # Compare Runs page (includes the gate's statistical comparison)
 │           └── 4_test_cases.py  # Test Cases Manager page
 ├── tests/
 │   ├── conftest.py              # Shared fixtures
+│   ├── fixtures/
+│   │   └── baseline_mock.json   # Committed mock baseline used by the gate-dogfood CI job
+│   ├── gate_helpers.py          # Synthetic RunSummary builders for gate tests
 │   ├── test_chatbots.py         # Chatbot adapter tests
-│   ├── test_evaluators.py       # Evaluator tests (rule-based, safety, consistency)
+│   ├── test_cli.py              # CLI tests (typer's CliRunner, mock provider)
+│   ├── test_config.py           # Config loader tests (LRU cache correctness)
+│   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs())
 │   ├── test_deepeval_evaluator.py # DeepEval evaluator logic tests
+│   ├── test_evaluators.py       # Evaluator tests (rule-based, safety, consistency)
+│   ├── test_gate_baseline.py    # Baseline build/hash/save/load tests
+│   ├── test_gate_comparison.py  # Case pairing and per-metric comparison tests
+│   ├── test_gate_models.py      # Gate Pydantic model tests
+│   ├── test_gate_policy.py      # Policy loading and full gate-evaluation tests
+│   ├── test_gate_reporter.py    # Gate console and Markdown reporter tests
+│   ├── test_gate_statistics.py  # Bootstrap and flakiness tests (seeded, deterministic)
+│   ├── test_llm_judge_evaluator.py # LLM Judge evaluator tests (score parsing, sanitization)
 │   ├── test_models.py           # Pydantic model tests
-│   ├── test_runner.py           # Runner and dataset loading tests
-│   ├── test_runner_errors.py    # Retry, timeout, and error-path tests
+│   ├── test_openai_chatbot.py   # OpenAICompatibleChatbot tests (key validation, error handling)
+│   ├── test_rag_chatbot.py      # DemoRAGChatbot tests (knowledge base loading, retrieval)
+│   ├── test_ragas_evaluator.py  # RAGAS evaluator tests (metric resolution, config logic)
 │   ├── test_redaction.py        # Secret redaction tests
-│   └── test_reporting.py        # Report generation tests
-├── .github/workflows/ci.yml     # CI/CD pipeline (lint + test)
+│   ├── test_reporting.py        # Report generation tests
+│   ├── test_runner.py           # Runner and dataset loading tests
+│   ├── test_runner_errors.py    # Runner error-path tests (retries, malformed datasets, evaluator failures)
+│   └── test_runner_safety_helpers.py # Secret redaction and error-classification helper tests
+├── .github/workflows/ci.yml     # CI/CD pipeline (lint, test, gate-dogfood)
 └── pyproject.toml               # Dependencies, ruff, mypy, pytest config
 ```
 
@@ -153,7 +181,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 267 tests using mock chatbots with coverage report (gate: ≥80%).
+Runs 384 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -313,6 +341,73 @@ The sidebar is shared across all pages and provides:
 - Evaluator checkboxes with descriptions
 - Runner concurrency and timeout settings
 
+## Regression Gate (CI/CD)
+
+Turn evaluations into a quality gate: compare the current state against a committed
+baseline and fail the build (exit code 1) on statistically significant regressions.
+
+```bash
+# 1. Create a baseline (3 samples per case for statistical power) and commit it
+llm-eval-lab run --samples 3
+llm-eval-lab baseline save <run_id_1> <run_id_2> <run_id_3> --name main
+git add baselines/main.json && git commit -m "chore: update eval baseline"
+
+# 2. In a PR, gate against it
+llm-eval-lab check --baseline main --samples 3
+echo $?   # 0 = pass, 1 = regression, 2 = execution/config error
+```
+
+The statistical engine pairs test cases between the two runs and bootstraps the
+per-case regression deltas (95% CI + one-sided p-value). A metric only breaks the
+build when it is listed in the gate policy AND the regression is statistically
+significant AND larger than both `min_effect_size` and its `max_regression`. Hard
+rules bypass statistics entirely: a newly failing `critical` case always fails the
+gate, and mean per-case flakiness above `max_flakiness` fails it too.
+Policy reference: [`config/gate.yaml`](config/gate.yaml).
+
+### GitHub Action
+
+```yaml
+- uses: gonzaloMorenoc/llm-eval-lab@main
+  with:
+    provider: groq          # default: mock (free, no keys)
+    baseline: baselines/main.json
+    samples: "3"
+  env:
+    GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+```
+
+Without `OPENAI_API_KEY` set as `env` on the step (same pattern as `GROQ_API_KEY`
+above), only the free evaluators run (rule-based, safety). RAGAS activates
+automatically once `OPENAI_API_KEY` is present; DeepEval additionally needs
+`USE_DEEPEVAL=true`. LLM-judge is independent of `OPENAI_API_KEY` — it only needs
+`USE_LLM_JUDGE=true` and reuses whichever provider key the chatbot itself is
+already configured with (e.g. `GROQ_API_KEY` in the example above). The
+`evaluators` input further narrows which of those registered evaluators actually
+run. `check` prints an API-call estimate before running, and writes
+`gate_report.md` (also to `$GITHUB_STEP_SUMMARY`) ready to paste as a PR comment.
+
+This repository's own `gate-dogfood` CI job (see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs this Action on every
+push/PR against a committed mock baseline. It is a sound end-to-end plumbing test
+(install → run → gate computation → exit code), but it is **not** a regression
+detector: in that mock baseline only 3 of 43 cases pass (7%), and all 7
+critical-severity cases already fail, so the `no_new_critical_failures` hard rule
+can never fire for any future change, and the only gated metric (`pass_rate`) has
+just those 3 passing cases as its entire headroom. A green `gate-dogfood` proves
+the gate runs — not that it would catch a real regression.
+
+### CLI reference
+
+| Command | Purpose |
+|---------|---------|
+| `llm-eval-lab run [--samples N] [--datasets a,b] [--evaluators x,y]` | Run an evaluation (N separate runs with `--samples`) |
+| `llm-eval-lab baseline save <run_id>... [--name main]` | Aggregate one or more runs into `baselines/<name>.json` |
+| `llm-eval-lab check --baseline main [--policy config/gate.yaml]` | Run + gate against a baseline: exit 0/1/2 |
+| `llm-eval-lab compare <run_a> <run_b>` | Statistical comparison between two stored runs, no verdict |
+
+`python -m src` (no subcommand) still defaults to `run`.
+
 ## Test Cases
 
 ### Dataset Format
@@ -425,7 +520,7 @@ Reports are generated in `results/{run_id}/`:
 ### Run tests
 
 ```bash
-pytest                          # Full suite with coverage report
+pytest                          # 384 tests with coverage report
 pytest -x                       # Stop on first failure
 pytest tests/test_evaluators.py # Run specific test file
 pytest -k "safety"              # Run tests matching keyword
@@ -450,6 +545,9 @@ mypy src/ --ignore-missing-imports
 GitHub Actions runs automatically on push/PR to `main`:
 1. **Lint job**: ruff check + ruff format + mypy
 2. **Test job**: pytest with coverage on Python 3.11, 3.12 and 3.13
+3. **gate-dogfood job**: runs the composite Action (`action.yml`) against the
+   committed mock baseline — an end-to-end plumbing check, not a regression
+   detector (see [Regression Gate (CI/CD)](#regression-gate-cicd))
 
 ## Adding a New Evaluator
 

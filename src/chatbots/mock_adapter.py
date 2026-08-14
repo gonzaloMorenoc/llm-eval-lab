@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 
 from src.chatbots.base import BaseChatbot, BaseRAGChatbot, ChatbotResponse
 
@@ -65,8 +66,13 @@ def _find_contexts(text: str) -> list[str]:
 class MockChatbot(BaseChatbot):
     """Mock plain LLM for testing without API keys."""
 
-    def __init__(self, latency_range: tuple[float, float] = (50.0, 200.0)) -> None:
+    def __init__(
+        self,
+        latency_range: tuple[float, float] = (50.0, 200.0),
+        transform: Callable[[str], str] | None = None,
+    ) -> None:
         self._latency_range = latency_range
+        self._transform = transform
 
     async def complete(self, messages: list[dict], **kwargs) -> ChatbotResponse:
         last_user_msg = ""
@@ -76,6 +82,8 @@ class MockChatbot(BaseChatbot):
                 break
 
         content = _find_response(last_user_msg)
+        if self._transform is not None:
+            content = self._transform(content)
         latency = round(random.uniform(*self._latency_range), 2)
 
         return ChatbotResponse(
@@ -93,8 +101,13 @@ class MockChatbot(BaseChatbot):
 class MockRAGChatbot(BaseRAGChatbot):
     """Mock RAG chatbot that returns deterministic retrieved contexts."""
 
-    def __init__(self, latency_range: tuple[float, float] = (80.0, 300.0)) -> None:
+    def __init__(
+        self,
+        latency_range: tuple[float, float] = (80.0, 300.0),
+        transform: Callable[[str], str] | None = None,
+    ) -> None:
         self._latency_range = latency_range
+        self._transform = transform
 
     async def retrieve(self, query: str) -> list[str]:
         return _find_contexts(query)
@@ -108,6 +121,8 @@ class MockRAGChatbot(BaseRAGChatbot):
 
         contexts = await self.retrieve(last_user_msg)
         content = _find_response(last_user_msg)
+        if self._transform is not None:
+            content = self._transform(content)
         latency = round(random.uniform(*self._latency_range), 2)
 
         return ChatbotResponse(
