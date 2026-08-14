@@ -20,6 +20,8 @@ dependencies = [
     "openai>=1.0",
     "chromadb>=0.5",
     "langchain-openai>=0.2",
+    "typer>=0.12",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
