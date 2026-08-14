@@ -44,3 +44,15 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+  gate-dogfood:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run regression gate against the mock baseline
+        uses: ./
+        with:
+          provider: mock
+          baseline: tests/fixtures/baseline_mock.json
+          evaluators: rule_based,safety
