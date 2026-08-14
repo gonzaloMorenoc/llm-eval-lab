@@ -95,3 +95,92 @@ class TestRunCommand:
         report = json.loads((tmp_path / run_dirs[0] / "report.json").read_text())
         evaluator_names = {evaluation["evaluator"] for test_result in report["results"] for evaluation in test_result["evaluations"]}
         assert evaluator_names == {"rule_based"}
+
+    def test_load_summary_with_malformed_json_exits_2(self, tmp_path):
+        """Test that malformed report.json raises exit code 2 with clear message."""
+        results_dir = tmp_path / "results"
+        run_id = "test_run_123"
+        run_dir = results_dir / run_id
+        run_dir.mkdir(parents=True)
+        # Write malformed JSON to report.json
+        (run_dir / "report.json").write_text('{"invalid": json}')
+        result = runner.invoke(
+            app,
+            ["run", "--provider", "mock", "--datasets", "functional", "--results-dir", str(results_dir)],
+        )
+        # Now try to baseline save with the malformed report
+        result = runner.invoke(
+            app,
+            ["baseline", "save", run_id, "--results-dir", str(results_dir), "--baselines-dir", str(tmp_path / "baselines")],
+        )
+        assert result.exit_code == 2
+        assert "report.json" in result.output
+        assert "Failed to parse" in result.output
+
+
+def _do_run(tmp_path, datasets="functional", samples=1):
+    """Run the mock provider and return the created run ids (oldest first)."""
+    results_dir = tmp_path / "results"
+    args = ["run", "--provider", "mock", "--datasets", datasets, "--results-dir", str(results_dir)]
+    if samples > 1:
+        args += ["--samples", str(samples)]
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    return results_dir, sorted(os.listdir(results_dir))
+
+
+class TestBaselineSave:
+    def test_save_single_run(self, tmp_path):
+        results_dir, run_ids = _do_run(tmp_path)
+        baselines_dir = tmp_path / "baselines"
+        result = runner.invoke(
+            app,
+            [
+                "baseline",
+                "save",
+                run_ids[0],
+                "--name",
+                "main",
+                "--results-dir",
+                str(results_dir),
+                "--baselines-dir",
+                str(baselines_dir),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert (baselines_dir / "main.json").exists()
+
+    def test_save_multiple_runs_records_samples(self, tmp_path):
+        from src.gate.models import BaselineFile
+
+        results_dir, run_ids = _do_run(tmp_path, samples=2)
+        baselines_dir = tmp_path / "baselines"
+        result = runner.invoke(
+            app,
+            ["baseline", "save", *run_ids, "--results-dir", str(results_dir), "--baselines-dir", str(baselines_dir)],
+        )
+        assert result.exit_code == 0, result.output
+        baseline = BaselineFile.model_validate_json((baselines_dir / "main.json").read_text())
+        assert baseline.samples == 2
+
+    def test_save_unknown_run_exits_2(self, tmp_path):
+        result = runner.invoke(
+            app,
+            ["baseline", "save", "no_such_run", "--results-dir", str(tmp_path), "--baselines-dir", str(tmp_path)],
+        )
+        assert result.exit_code == 2
+        assert "Run not found" in result.output
+
+
+class TestCompareCommand:
+    def test_compare_two_runs_renders_table(self, tmp_path):
+        results_dir, run_ids = _do_run(tmp_path, samples=2)
+        result = runner.invoke(app, ["compare", run_ids[0], run_ids[1], "--results-dir", str(results_dir)])
+        assert result.exit_code == 0, result.output
+        assert "Current" in result.output
+        assert "Regression gate" in result.output
+
+    def test_compare_missing_run_exits_2(self, tmp_path):
+        results_dir, run_ids = _do_run(tmp_path)
+        result = runner.invoke(app, ["compare", run_ids[0], "ghost", "--results-dir", str(results_dir)])
+        assert result.exit_code == 2

@@ -9,6 +9,11 @@ import typer
 from dotenv import load_dotenv
 from rich.console import Console
 
+from src.gate.baseline import BaselineError, build_baseline, save_baseline
+from src.gate.comparison import CompatibilityError
+from src.gate.models import GatePolicy
+from src.gate.policy import evaluate_gate
+from src.reporting.gate_reporter import render_gate_console
 from src.reporting.json_reporter import generate_json_report
 from src.reporting.markdown_reporter import generate_markdown_report
 from src.runner.models import RunSummary, TestCase
@@ -149,13 +154,17 @@ async def _execute_runs(
 
 
 def _load_summary(results_dir: str, run_id: str) -> RunSummary:
-    """Load a persisted run's report.json as a RunSummary (exit 2 if missing)."""
+    """Load a persisted run's report.json as a RunSummary (exit 2 if missing or invalid)."""
     path = os.path.join(results_dir, run_id, "report.json")
     if not os.path.exists(path):
         console.print(f"[red]Run not found: {path}[/red]")
         raise typer.Exit(code=2)
-    with open(path) as f:
-        return RunSummary.model_validate_json(f.read())
+    try:
+        with open(path) as f:
+            return RunSummary.model_validate_json(f.read())
+    except Exception as e:
+        console.print(f"[red]Failed to parse {path}: {e}[/red]")
+        raise typer.Exit(code=2) from e
 
 
 @app.command()
@@ -173,3 +182,38 @@ def run(
     resolved_mode = (mode or default_mode).lower()
     summaries = asyncio.run(_execute_runs(resolved_provider, resolved_mode, samples, evaluators, datasets, results_dir))
     console.print(f"\nRun ids: {', '.join(s.run_id for s in summaries)}")
+
+
+@baseline_app.command("save")
+def baseline_save(
+    run_ids: list[str] = typer.Argument(..., help="One or more run ids under --results-dir."),
+    name: str = typer.Option("main", help="Baseline name (file becomes <baselines-dir>/<name>.json)."),
+    results_dir: str = typer.Option(_DEFAULT_RESULTS_DIR, help="Directory containing run reports."),
+    baselines_dir: str = typer.Option("baselines", help="Directory for baseline files."),
+) -> None:
+    """Aggregate one or more runs into a committed, diffable baseline file."""
+    summaries = [_load_summary(results_dir, run_id) for run_id in run_ids]
+    try:
+        baseline = build_baseline(summaries)
+    except BaselineError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+    path = save_baseline(baseline, os.path.join(baselines_dir, f"{name}.json"))
+    console.print(f"Baseline saved: {path} (samples: {baseline.samples}, cases: {len(baseline.cases)})")
+
+
+@app.command()
+def compare(
+    run_a: str = typer.Argument(..., help="Run id used as baseline side."),
+    run_b: str = typer.Argument(..., help="Run id used as current side."),
+    results_dir: str = typer.Option(_DEFAULT_RESULTS_DIR, help="Directory containing run reports."),
+) -> None:
+    """Statistical comparison between two stored runs (no verdict, no special exit code)."""
+    baseline = build_baseline([_load_summary(results_dir, run_a)])
+    current = build_baseline([_load_summary(results_dir, run_b)])
+    try:
+        verdict = evaluate_gate(baseline, current, GatePolicy())
+    except CompatibilityError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+    render_gate_console(verdict, console)
