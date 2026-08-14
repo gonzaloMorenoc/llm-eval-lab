@@ -14,7 +14,7 @@ def main() -> None:
 
 
 def cli() -> None:
-    """Backwards-compatible alias for the old console-script entry point."""
+    """Console-script entry point (``llm-eval-lab``)."""
     main()
 
 

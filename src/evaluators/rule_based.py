@@ -4,31 +4,39 @@ This is the simplest evaluator: no LLM calls, no API keys, no cost. It runs
 fast, deterministic checks that any chatbot response should pass:
 
   1. **Non-empty**: Response must contain actual content.
-  2. **Minimum length**: At least 10 characters (catches empty/truncated responses).
+  2. **Minimum length**: catches empty/truncated responses.
   3. **Key-term relevance**: Extracts meaningful words from expected_behavior
      and checks if the response mentions at least one. This is a shallow
      relevance check — it catches completely off-topic responses but won't
      catch subtle misunderstandings (that's what RAGAS is for).
   4. **Refusal detection**: If the test expects a refusal (e.g., safety tests),
      checks that the response doesn't show compliance indicators.
-  5. **Latency**: Response must arrive within 30 seconds.
+  5. **Latency**: Response must arrive within the configured budget.
 
 Why composable check functions?
   Each check is a standalone function returning (passed, reason). This makes
   them independently testable and reusable. The evaluator composes them into
   a single verdict by requiring ALL checks to pass.
 
+Configuration:
+  ``rule_based.min_response_length`` (default 10) and
+  ``rule_based.max_latency_ms`` (default 30000) live in config.yaml. Both
+  defaults are arbitrary starting points — tune them to your use case. The
+  latency check is a *quality* threshold: the response did arrive, just too
+  slowly. ``runner.timeout_ms`` is the separate hard deadline that aborts the
+  request outright.
+
 Limitations:
   - Keyword matching is shallow — 'python' in response doesn't mean the
     explanation is correct.
   - Refusal detection uses a fixed list of English phrases.
-  - The 10-char minimum is arbitrary; adjust in config for your use case.
 """
 
 from __future__ import annotations
 
 import re
 
+from src.config import load_config
 from src.evaluators.base import BaseEvaluator
 from src.runner.models import EvaluationResult, TestCase
 
@@ -79,6 +87,11 @@ def response_time_under(latency_ms: float, threshold_ms: int) -> tuple[bool, str
 class RuleBasedEvaluator(BaseEvaluator):
     """Runs deterministic checks derived from the test case's expected_behavior."""
 
+    def __init__(self, min_response_length: int | None = None, max_latency_ms: int | None = None) -> None:
+        cfg = load_config().get("rule_based", {})
+        self._min_length = min_response_length if min_response_length is not None else cfg.get("min_response_length", 10)
+        self._max_latency_ms = max_latency_ms if max_latency_ms is not None else cfg.get("max_latency_ms", 30000)
+
     def name(self) -> str:
         return "rule_based"
 
@@ -95,7 +108,7 @@ class RuleBasedEvaluator(BaseEvaluator):
         checks.append(is_not_empty(response))
 
         # Check minimum reasonable length
-        checks.append(min_length(response, 10))
+        checks.append(min_length(response, self._min_length))
 
         # Extract keywords from expected_behavior for a basic relevance check
         expected = test_case.expected_behavior.lower()
@@ -131,7 +144,7 @@ class RuleBasedEvaluator(BaseEvaluator):
                     checks.append((False, "Response missing key terms from expected behavior"))
 
         # Latency check
-        checks.append(response_time_under(latency_ms, 30000))
+        checks.append(response_time_under(latency_ms, self._max_latency_ms))
 
         all_passed = all(p for p, _ in checks)
         reasons = [r for _, r in checks]

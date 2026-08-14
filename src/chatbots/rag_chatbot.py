@@ -28,6 +28,7 @@ import chromadb
 from openai import AsyncOpenAI
 
 from src.chatbots.base import BaseRAGChatbot, ChatbotResponse
+from src.chatbots.errors import ChatbotAPIError, wrap_api_error
 from src.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,12 @@ class DemoRAGChatbot(BaseRAGChatbot):
         if not os.path.exists(path):
             logger.warning("Knowledge base file not found: %s", path)
             return
+
+        # Fetch the existing ids once rather than issuing a Chroma query per
+        # line — the per-document round trip made load time scale with the
+        # size of the knowledge base for no reason.
+        existing_ids = set(self._collection.get(include=[])["ids"])
+
         docs, ids, metadatas = [], [], []
         with open(path) as f:
             for line_num, line in enumerate(f, start=1):
@@ -101,8 +108,7 @@ class DemoRAGChatbot(BaseRAGChatbot):
 
                 doc_id = entry["id"]
                 # Skip if already exists in collection or in current batch
-                existing = self._collection.get(ids=[doc_id])
-                if existing["ids"] or doc_id in ids:
+                if doc_id in existing_ids or doc_id in ids:
                     continue
                 content = entry.get("content", "")
                 title = entry.get("title", "")
@@ -142,12 +148,12 @@ class DemoRAGChatbot(BaseRAGChatbot):
             )
         except Exception as e:
             logger.error("RAG generation failed for %s/%s: %s", self._provider, self._model, e)
-            raise RuntimeError(f"API call to {self._provider}/{self._model} failed: {type(e).__name__}: {e}") from e
+            raise wrap_api_error(e, self._provider, self._model) from e
 
         latency = (time.perf_counter() - start) * 1000
 
         if not response.choices:
-            raise RuntimeError(f"API returned empty choices for {self._provider}/{self._model}")
+            raise ChatbotAPIError(f"API returned empty choices for {self._provider}/{self._model}")
 
         content = response.choices[0].message.content or ""
 

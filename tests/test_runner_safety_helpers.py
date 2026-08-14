@@ -1,62 +1,15 @@
-"""Tests for the runner-level safety helpers: secret redaction, error
-summarization, rate-limit and network-error heuristics.
+"""Tests for the runner's retry heuristics.
 
-These guarantees prevent two regressions:
-  - API keys leaking into persisted ``report.json`` files (A3).
-  - Substring matches like ``"separated"`` being misclassified as rate-limit
-    errors and triggering pointless retries (A6).
+These prevent substring matches like ``"separated"`` from being misclassified
+as rate-limit errors and triggering pointless retries (A6). Secret redaction
+moved to ``src.redaction``; see ``tests/test_redaction.py``.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from src.runner.runner import (
-    _is_network_error,
-    _is_rate_limit,
-    _redact_secrets,
-    _summarize_error,
-)
-
-
-class TestRedactSecrets:
-    @pytest.mark.parametrize(
-        "raw,leak",
-        [
-            ("HTTP 401: invalid sk-abc123XYZdefghi from openai", "sk-abc123XYZdefghi"),
-            ("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig", "eyJhbGciOiJIUzI1NiJ9.payload.sig"),
-            ("Using gsk_aBcDeF12345xyz9876 for Groq", "gsk_aBcDeF12345xyz9876"),
-            ("Google key: AIzaSyA-fakekeyfortest123", "AIzaSyA-fakekeyfortest123"),
-            ('config: {"api_key": "supersecret-token-xx"}', "supersecret-token-xx"),
-        ],
-    )
-    def test_known_secret_patterns_are_redacted(self, raw: str, leak: str) -> None:
-        out = _redact_secrets(raw)
-        assert leak not in out
-        assert "[REDACTED]" in out
-
-    def test_innocuous_text_is_untouched(self) -> None:
-        assert _redact_secrets("connection refused on port 8080") == "connection refused on port 8080"
-
-
-class TestSummarizeError:
-    def test_includes_type_and_message(self) -> None:
-        exc = ValueError("payload too large")
-        out = _summarize_error(exc)
-        assert "ValueError" in out
-        assert "payload too large" in out
-
-    def test_redacts_secrets_in_message(self) -> None:
-        exc = RuntimeError("auth failed for sk-leaked-key-1234567890")
-        out = _summarize_error(exc)
-        assert "sk-leaked-key-1234567890" not in out
-        assert "[REDACTED]" in out
-
-    def test_truncates_long_messages(self) -> None:
-        exc = RuntimeError("x" * 1000)
-        out = _summarize_error(exc, max_len=100)
-        assert len(out) <= 100 + len("RuntimeError: ") + 1  # +1 for the ellipsis
-        assert out.endswith("…")
+from src.runner.runner import _is_network_error, _is_rate_limit
 
 
 class TestIsRateLimit:

@@ -124,6 +124,34 @@ class TestRuleBasedEvaluator:
     async def test_name(self, evaluator: RuleBasedEvaluator):
         assert evaluator.name() == "rule_based"
 
+    async def test_thresholds_come_from_config_by_default(self, evaluator: RuleBasedEvaluator):
+        from src.config import load_config
+
+        cfg = load_config().get("rule_based", {})
+        assert evaluator._min_length == cfg["min_response_length"]
+        assert evaluator._max_latency_ms == cfg["max_latency_ms"]
+
+    async def test_min_length_is_overridable(self, functional_test_case: TestCase):
+        """A terse-but-valid answer should be acceptable when configured so."""
+        strict = RuleBasedEvaluator(min_response_length=500)
+        result = await strict.evaluate(
+            test_case=functional_test_case,
+            response="Machine learning lets systems learn from data.",
+            latency_ms=100.0,
+        )
+        assert result.passed is False
+        assert any("Length" in c["reason"] for c in result.details["checks"])
+
+    async def test_max_latency_is_overridable(self, functional_test_case: TestCase):
+        impatient = RuleBasedEvaluator(max_latency_ms=50)
+        result = await impatient.evaluate(
+            test_case=functional_test_case,
+            response="Machine learning is a subset of AI that enables systems to learn from data.",
+            latency_ms=200.0,
+        )
+        assert result.passed is False
+        assert any("Latency" in c["reason"] for c in result.details["checks"])
+
     async def test_good_response_passes(self, evaluator: RuleBasedEvaluator, functional_test_case: TestCase):
         result = await evaluator.evaluate(
             test_case=functional_test_case,

@@ -46,7 +46,21 @@ def test_refresh_invalidates_cache() -> None:
     assert first is not refreshed
 
 
-def test_returns_same_object_on_cache_hit() -> None:
+def test_returns_independent_copies() -> None:
+    """Callers must not be able to reach the cached dict.
+
+    The dashboard overrides ``runner.max_concurrent`` on the config it gets
+    back; if that were the cached object, the override would leak into every
+    other consumer in the process.
+    """
     first = config_module.load_config()
     second = config_module.load_config()
-    assert first is second
+    assert first is not second
+    assert first == second
+
+
+def test_mutating_result_does_not_affect_later_loads() -> None:
+    first = config_module.load_config()
+    original = first["runner"]["max_concurrent"]
+    first["runner"]["max_concurrent"] = 999
+    assert config_module.load_config()["runner"]["max_concurrent"] == original

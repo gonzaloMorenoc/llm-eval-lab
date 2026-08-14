@@ -197,6 +197,27 @@ class TestEvaluate:
         assert "error" in result.reason.lower()
         assert "error" in result.details
 
+    async def test_api_error_is_redacted_before_persisting(self, evaluator, functional_case):
+        """The judge swallows its own exceptions, so it must redact them itself.
+
+        Whatever lands in ``reason``/``details`` is written verbatim into
+        results/<run_id>/report.json.
+        """
+        leaked = "401 Unauthorized for key sk-proj-abcdef1234567890"
+        evaluator._client.chat.completions.create = AsyncMock(side_effect=RuntimeError(leaked))
+        result = await evaluator.evaluate(functional_case, response="Some response")
+
+        assert "sk-proj-abcdef1234567890" not in result.reason
+        assert "sk-proj-abcdef1234567890" not in str(result.details)
+        assert "[REDACTED]" in result.reason
+        assert result.details["error_type"] == "RuntimeError"
+
+    async def test_api_error_message_is_truncated(self, evaluator, functional_case):
+        """Long provider errors must not bloat every failed result in the report."""
+        evaluator._client.chat.completions.create = AsyncMock(side_effect=RuntimeError("x" * 5000))
+        result = await evaluator.evaluate(functional_case, response="Some response")
+        assert len(result.details["error"]) < 500
+
     async def test_unparseable_output_returns_zero(self, evaluator, functional_case):
         raw_output = "I don't know how to format scores."
         evaluator._client.chat.completions.create = AsyncMock(return_value=_make_completion_response(raw_output))
