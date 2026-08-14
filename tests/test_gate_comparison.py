@@ -173,38 +173,49 @@ class TestCompareMetrics:
         assert rule.breaches is False
 
     def test_large_effect_not_significant_does_not_breach(self):
-        # F3a: Large regression that is NOT statistically significant → breaches False
-        # Use deltas with high variance that straddle zero to prevent statistical significance
-        base = _baseline({f"c{i}": {"rule_based": 0.7} for i in range(8)})
-        curr_scores = {
-            "c0": {"rule_based": 0.5},
-            "c1": {"rule_based": 0.9},
-            "c2": {"rule_based": 0.55},
-            "c3": {"rule_based": 0.85},
-            "c4": {"rule_based": 0.52},
-            "c5": {"rule_based": 0.88},
-            "c6": {"rule_based": 0.48},
-            "c7": {"rule_based": 0.92},
-        }
-        curr = _baseline(curr_scores)
+        # F3a: isolate `significant` check — all other conjuncts satisfied but not significant
+        # Deltas: [1.0, -0.7, 0.9, -0.8, 0.6, -0.4] → mean ~0.1, huge variance → not significant
+        base = _baseline(
+            {
+                "c0": {"rule_based": 1.0},
+                "c1": {"rule_based": 0.3},
+                "c2": {"rule_based": 0.9},
+                "c3": {"rule_based": 0.2},
+                "c4": {"rule_based": 0.6},
+                "c5": {"rule_based": 0.6},
+            }
+        )
+        curr = _baseline(
+            {
+                "c0": {"rule_based": 0.0},
+                "c1": {"rule_based": 1.0},
+                "c2": {"rule_based": 0.0},
+                "c3": {"rule_based": 1.0},
+                "c4": {"rule_based": 0.0},
+                "c5": {"rule_based": 1.0},
+            }
+        )
+        # Set max_regression LOW (0.01) so that conjunct is satisfied: 0.1 > 0.01 = True
         policy = GatePolicy(metrics={"rule_based": MetricPolicy(max_regression=0.01)})
         comparisons = compare_metrics(base, curr, policy)
         rule = next(c for c in comparisons if c.metric == "rule_based")
-        # High variance means p-value is high; without significance, breach is prevented
-        assert rule.breaches is False
+        assert rule.significant is False  # Not statistically significant despite large regression
+        assert rule.regression >= 0.05  # Above min_effect_size (0.05)
+        assert rule.breaches is False  # Blocked only by lack of significance
 
     def test_significant_but_below_max_regression_does_not_breach(self):
-        # F3b: Significant regression that is below max_regression → breaches False
-        base = _baseline({f"c{i}": {"rule_based": 0.95} for i in range(20)})
-        curr = _baseline({f"c{i}": {"rule_based": 0.90} for i in range(20)})
-        policy = GatePolicy(
-            metrics={"rule_based": MetricPolicy(max_regression=0.5)},  # high threshold
-        )
+        # F3b: isolate `> max_regression` check — all other conjuncts satisfied but not > max_regression
+        # Constant delta 0.2 across 20 cases: significant, above min_effect_size, but below high max_regression
+        base = _baseline({f"c{i}": {"rule_based": 0.8} for i in range(20)})
+        curr = _baseline({f"c{i}": {"rule_based": 0.6} for i in range(20)})
+        # Set max_regression HIGH (0.5) so regression (0.2) does not exceed it: 0.2 > 0.5 = False
+        policy = GatePolicy(metrics={"rule_based": MetricPolicy(max_regression=0.5)})
         comparisons = compare_metrics(base, curr, policy)
         rule = next(c for c in comparisons if c.metric == "rule_based")
-        assert rule.significant is True
-        assert rule.regression == pytest.approx(0.05)  # below max_regression (0.5)
-        assert rule.breaches is False
+        assert rule.significant is True  # Constant deltas, 20 cases → definitely significant
+        assert rule.regression == pytest.approx(0.2)  # Above min_effect_size (0.05)
+        assert rule.regression < 0.5  # Below max_regression
+        assert rule.breaches is False  # Blocked only by not exceeding max_regression
 
     def test_metric_in_both_sets_but_no_comparable_cases_omitted(self):
         # F4: Metric present in both metric_sets but no paired cases carry it → omitted from output
