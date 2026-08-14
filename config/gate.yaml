@@ -1,0 +1,19 @@
+# Regression gate policy. Used by `llm-eval-lab check --policy config/gate.yaml`.
+# Without --policy, these same built-in defaults apply.
+gate:
+  significance_level: 0.05   # p-value threshold for the paired bootstrap
+  min_effect_size: 0.05      # regressions smaller than this never break the build
+  n_resamples: 10000
+  seed: 42                   # bootstrap seed, for reproducible CI verdicts
+
+  # Only metrics listed here can break the build. Everything else is report-only.
+  # Metric names: pass_rate, <evaluator> (e.g. rule_based), <evaluator>.<metric>
+  # (e.g. ragas.answer_relevancy, deepeval.toxicity).
+  metrics:
+    pass_rate: {max_regression: 0.05}
+
+  hard_rules:
+    no_new_critical_failures: true   # a newly failing critical case always fails the gate
+    max_flakiness: 0.3               # mean per-case flakiness across the run
+
+  new_cases: report_only   # report_only | fail — cases present now but absent in the baseline
