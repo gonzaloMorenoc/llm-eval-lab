@@ -67,6 +67,7 @@ def compare_metrics(baseline: BaselineFile, current: BaselineFile, policy: GateP
     comparisons: list[MetricComparison] = []
     for metric in sorted(set(baseline.metric_set) & set(current.metric_set)):
         deltas = regression_deltas(pairs, metric)
+        # Metric with no comparable pairs is omitted here; if gated, it is surfaced by the policy layer's missing_gated_metrics check.
         if not deltas:
             continue
         boot = paired_bootstrap(deltas, n_resamples=policy.n_resamples, seed=policy.seed)

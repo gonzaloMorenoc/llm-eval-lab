@@ -12,7 +12,7 @@ from src.gate.comparison import (
     regression_deltas,
     validate_compatibility,
 )
-from src.gate.models import GatePolicy, MetricPolicy
+from src.gate.models import BaselineCase, BaselineFile, GatePolicy, MetricPolicy
 from tests.gate_helpers import make_summary
 
 
@@ -37,6 +37,48 @@ class TestValidateCompatibility:
         base = _baseline({"a": {"rule_based": 1.0}})
         curr = _baseline({"a": {"llm_judge": 0.8}})
         validate_compatibility(base, curr)  # no raise
+
+    def test_zero_shared_metrics_raises(self):
+        # F1: Test the defensively correct check against hand-edited or corrupted baseline JSON
+        # with disjoint, pass_rate-free metric_set values.
+        base_case = BaselineCase(
+            id="a",
+            category="functional",
+            severity="medium",
+            passed=True,
+            pass_samples=[True],
+            metrics={"rule_based": 1.0},
+        )
+        curr_case = BaselineCase(
+            id="a",
+            category="functional",
+            severity="medium",
+            passed=True,
+            pass_samples=[True],
+            metrics={"llm_judge": 0.8},
+        )
+        base = BaselineFile(
+            schema_version=1,
+            run_ids=["run1"],
+            timestamp="2026-08-14T00:00:00Z",
+            chatbot_id="test",
+            chatbot_mode="plain",
+            dataset_hash="hash1",
+            metric_set=["rule_based"],  # no pass_rate
+            cases=[base_case],
+        )
+        curr = BaselineFile(
+            schema_version=1,
+            run_ids=["run2"],
+            timestamp="2026-08-14T00:00:00Z",
+            chatbot_id="test",
+            chatbot_mode="plain",
+            dataset_hash="hash1",
+            metric_set=["llm_judge"],  # disjoint, no pass_rate
+            cases=[curr_case],
+        )
+        with pytest.raises(CompatibilityError, match="No shared metrics"):
+            validate_compatibility(base, curr)
 
 
 class TestPairCases:
@@ -74,6 +116,20 @@ class TestRegressionDeltas:
         curr = _baseline({"a": {"rule_based": 0.9}, "b": {"llm_judge": 0.9}})
         pairs, _, _ = pair_cases(base, curr)
         assert len(regression_deltas(pairs, "rule_based")) == 1
+
+    def test_metric_missing_on_baseline_is_skipped(self):
+        # F2: Metric absent in baseline, present in current → case skipped
+        base = _baseline({"a": {"rule_based": 1.0}})
+        curr = _baseline({"a": {"rule_based": 0.9, "llm_judge": 0.8}})
+        pairs, _, _ = pair_cases(base, curr)
+        assert len(regression_deltas(pairs, "llm_judge")) == 0
+
+    def test_metric_missing_on_current_is_skipped(self):
+        # F2: Metric present in baseline, absent in current → case skipped
+        base = _baseline({"a": {"rule_based": 1.0, "llm_judge": 0.9}})
+        curr = _baseline({"a": {"rule_based": 0.8}})
+        pairs, _, _ = pair_cases(base, curr)
+        assert len(regression_deltas(pairs, "llm_judge")) == 0
 
 
 class TestCompareMetrics:
@@ -115,3 +171,102 @@ class TestCompareMetrics:
         rule = next(c for c in comparisons if c.metric == "rule_based")
         # delta constante 0.02 es "significativo" pero < min_effect_size (0.05)
         assert rule.breaches is False
+
+    def test_large_effect_not_significant_does_not_breach(self):
+        # F3a: Large regression that is NOT statistically significant → breaches False
+        # Use deltas with high variance that straddle zero to prevent statistical significance
+        base = _baseline({f"c{i}": {"rule_based": 0.7} for i in range(8)})
+        curr_scores = {
+            "c0": {"rule_based": 0.5},
+            "c1": {"rule_based": 0.9},
+            "c2": {"rule_based": 0.55},
+            "c3": {"rule_based": 0.85},
+            "c4": {"rule_based": 0.52},
+            "c5": {"rule_based": 0.88},
+            "c6": {"rule_based": 0.48},
+            "c7": {"rule_based": 0.92},
+        }
+        curr = _baseline(curr_scores)
+        policy = GatePolicy(metrics={"rule_based": MetricPolicy(max_regression=0.01)})
+        comparisons = compare_metrics(base, curr, policy)
+        rule = next(c for c in comparisons if c.metric == "rule_based")
+        # High variance means p-value is high; without significance, breach is prevented
+        assert rule.breaches is False
+
+    def test_significant_but_below_max_regression_does_not_breach(self):
+        # F3b: Significant regression that is below max_regression → breaches False
+        base = _baseline({f"c{i}": {"rule_based": 0.95} for i in range(20)})
+        curr = _baseline({f"c{i}": {"rule_based": 0.90} for i in range(20)})
+        policy = GatePolicy(
+            metrics={"rule_based": MetricPolicy(max_regression=0.5)},  # high threshold
+        )
+        comparisons = compare_metrics(base, curr, policy)
+        rule = next(c for c in comparisons if c.metric == "rule_based")
+        assert rule.significant is True
+        assert rule.regression == pytest.approx(0.05)  # below max_regression (0.5)
+        assert rule.breaches is False
+
+    def test_metric_in_both_sets_but_no_comparable_cases_omitted(self):
+        # F4: Metric present in both metric_sets but no paired cases carry it → omitted from output
+        # Construct: baseline has rule_based on cases a,b; current has llm_judge on same cases
+        # When paired, no case has rule_based on both sides, so rule_based contributes zero deltas
+        base_a = BaselineCase(
+            id="a",
+            category="functional",
+            severity="medium",
+            passed=True,
+            pass_samples=[True],
+            metrics={"rule_based": 0.9},
+        )
+        base_b = BaselineCase(
+            id="b",
+            category="functional",
+            severity="medium",
+            passed=False,  # Ensure pass_rate has a delta
+            pass_samples=[False],
+            metrics={"rule_based": 0.85},
+        )
+        curr_a = BaselineCase(
+            id="a",
+            category="functional",
+            severity="medium",
+            passed=True,
+            pass_samples=[True],
+            metrics={"llm_judge": 0.8},
+        )
+        curr_b = BaselineCase(
+            id="b",
+            category="functional",
+            severity="medium",
+            passed=True,  # Different pass status for delta
+            pass_samples=[True],
+            metrics={"llm_judge": 0.75},
+        )
+        base = BaselineFile(
+            schema_version=1,
+            run_ids=["run1"],
+            timestamp="2026-08-14T00:00:00Z",
+            chatbot_id="test",
+            chatbot_mode="plain",
+            dataset_hash="hash1",
+            metric_set=["pass_rate", "rule_based", "llm_judge"],
+            cases=[base_a, base_b],
+        )
+        curr = BaselineFile(
+            schema_version=1,
+            run_ids=["run2"],
+            timestamp="2026-08-14T00:00:00Z",
+            chatbot_id="test",
+            chatbot_mode="plain",
+            dataset_hash="hash1",
+            metric_set=["pass_rate", "rule_based", "llm_judge"],
+            cases=[curr_a, curr_b],
+        )
+        comparisons = compare_metrics(base, curr, GatePolicy())
+        by_name = {c.metric: c for c in comparisons}
+        # rule_based is in both metric_sets but no paired case carries it on both sides → zero deltas → omitted
+        # llm_judge is in both metric_sets but no paired case carries it on both sides → zero deltas → omitted
+        # pass_rate has deltas from b changing from False to True
+        assert "rule_based" not in by_name
+        assert "llm_judge" not in by_name
+        assert "pass_rate" in by_name
