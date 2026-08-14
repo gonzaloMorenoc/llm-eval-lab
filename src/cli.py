@@ -9,11 +9,11 @@ import typer
 from dotenv import load_dotenv
 from rich.console import Console
 
-from src.gate.baseline import BaselineError, build_baseline, save_baseline
+from src.gate.baseline import BaselineError, build_baseline, load_baseline, save_baseline
 from src.gate.comparison import CompatibilityError
 from src.gate.models import GatePolicy
-from src.gate.policy import evaluate_gate
-from src.reporting.gate_reporter import render_gate_console
+from src.gate.policy import PolicyError, evaluate_gate, load_policy
+from src.reporting.gate_reporter import generate_gate_markdown, render_gate_console
 from src.reporting.json_reporter import generate_json_report
 from src.reporting.markdown_reporter import generate_markdown_report
 from src.runner.models import RunSummary, TestCase
@@ -217,3 +217,59 @@ def compare(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=2) from e
     render_gate_console(verdict, console)
+
+
+def _resolve_baseline_path(baseline: str, baselines_dir: str) -> str:
+    """A value with a path separator or .json suffix is a path; otherwise a name in baselines_dir."""
+    if baseline.endswith(".json") or os.path.sep in baseline:
+        return baseline
+    return os.path.join(baselines_dir, f"{baseline}.json")
+
+
+@app.command()
+def check(
+    baseline: str = typer.Option("main", help="Baseline name or path to a baseline JSON file."),
+    provider: str | None = typer.Option(None, help="Provider name (overrides ACTIVE_PROVIDER)."),
+    mode: str | None = typer.Option(None, help="plain or rag (overrides CHATBOT_MODE)."),
+    samples: int = typer.Option(1, min=1, help="Times each test case is executed."),
+    evaluators: str | None = typer.Option(None, help="Comma-separated evaluator subset."),
+    datasets: str | None = typer.Option(None, help="Comma-separated dataset names."),
+    policy: str | None = typer.Option(None, help="Path to a gate policy YAML (default: built-in policy)."),
+    results_dir: str = typer.Option(_DEFAULT_RESULTS_DIR, help="Directory where run reports are written."),
+    baselines_dir: str = typer.Option("baselines", help="Directory containing baseline files."),
+) -> None:
+    """Run an evaluation and fail (exit 1) on significant quality regressions vs the baseline."""
+    try:
+        gate_policy = load_policy(policy)
+        baseline_file = load_baseline(_resolve_baseline_path(baseline, baselines_dir))
+    except (PolicyError, BaselineError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+
+    resolved_provider = provider or os.getenv("ACTIVE_PROVIDER") or None
+    default_mode: str = os.getenv("CHATBOT_MODE", "plain")
+    resolved_mode = (mode or default_mode).lower()
+    try:
+        summaries = asyncio.run(_execute_runs(resolved_provider, resolved_mode, samples, evaluators, datasets, results_dir))
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[red]Evaluation failed: {e}[/red]")
+        raise typer.Exit(code=2) from e
+
+    current = build_baseline(summaries)
+    try:
+        verdict = evaluate_gate(baseline_file, current, gate_policy)
+    except CompatibilityError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+
+    render_gate_console(verdict, console)
+    output_dir = os.path.join(results_dir, summaries[-1].run_id)
+    md_path = generate_gate_markdown(verdict, output_dir)
+    console.print(f"Gate report: {md_path}")
+
+    if verdict.missing_gated_metrics:
+        raise typer.Exit(code=2)
+    if not verdict.passed:
+        raise typer.Exit(code=1)

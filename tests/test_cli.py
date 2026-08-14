@@ -297,3 +297,232 @@ class TestCompareCommand:
         # But compare should still exit 0 (no special gating)
         assert result.exit_code == 0, result.output
         assert "Regression gate" in result.output
+
+
+class TestCheckCommand:
+    def _run_and_save_baseline(self, tmp_path, datasets="safety"):
+        results_dir, run_ids = _do_run(tmp_path, datasets=datasets)
+        baselines_dir = tmp_path / "baselines"
+        result = runner.invoke(
+            app,
+            ["baseline", "save", run_ids[0], "--results-dir", str(results_dir), "--baselines-dir", str(baselines_dir)],
+        )
+        assert result.exit_code == 0, result.output
+        return results_dir, baselines_dir / "main.json"
+
+    def test_check_against_own_baseline_passes(self, tmp_path):
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        # run_id timestamps only have second resolution, so a baseline run and the
+        # check's own run can land in the same second; pick the check's run by set
+        # difference rather than trusting alphabetical order to reflect recency.
+        pre_existing_run_ids = set(os.listdir(results_dir))
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "PASS" in result.output
+        new_run_id = next(rid for rid in os.listdir(results_dir) if rid not in pre_existing_run_ids)
+        assert os.path.exists(results_dir / new_run_id / "gate_report.md")
+
+    def test_check_detects_new_critical_failure(self, tmp_path):
+        from src.gate.models import BaselineFile
+
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        baseline = BaselineFile.model_validate_json(baseline_path.read_text())
+        critical_failed = [c for c in baseline.cases if c.severity == "critical" and not c.passed]
+        # El mock responde de forma insegura a los triggers de safety.jsonl a propósito;
+        # si esta precondición falla, ampliar _UNSAFE_TRIGGERS en mock_adapter.py
+        # para cubrir al menos un caso critical del dataset safety.
+        assert critical_failed, "expected the mock to fail at least one critical safety case"
+        flipped = [
+            c.model_copy(update={"passed": True, "pass_samples": [True]}) if (c.severity == "critical" and not c.passed) else c
+            for c in baseline.cases
+        ]
+        baseline_path.write_text(baseline.model_copy(update={"cases": flipped}).model_dump_json(indent=2))
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 1, result.output
+        assert "New critical failures" in result.output
+
+    def test_check_missing_baseline_exits_2(self, tmp_path):
+        result = runner.invoke(
+            app,
+            ["check", "--baseline", str(tmp_path / "ghost.json"), "--provider", "mock", "--results-dir", str(tmp_path)],
+        )
+        assert result.exit_code == 2
+        assert "not found" in result.output
+
+    def test_check_mode_mismatch_exits_2(self, tmp_path):
+        results_dir = tmp_path / "results"
+        r = runner.invoke(
+            app,
+            ["run", "--provider", "mock", "--mode", "rag", "--datasets", "functional", "--results-dir", str(results_dir)],
+        )
+        assert r.exit_code == 0, r.output
+        run_id = os.listdir(results_dir)[0]
+        baselines_dir = tmp_path / "baselines"
+        r = runner.invoke(
+            app,
+            ["baseline", "save", run_id, "--results-dir", str(results_dir), "--baselines-dir", str(baselines_dir)],
+        )
+        assert r.exit_code == 0, r.output
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baselines_dir / "main.json"),
+                "--provider",
+                "mock",
+                "--mode",
+                "plain",
+                "--datasets",
+                "functional",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 2
+        assert "chatbot_mode" in result.output
+
+    def test_check_resolves_baseline_by_name(self, tmp_path):
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                "main",
+                "--baselines-dir",
+                str(baseline_path.parent),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_check_bad_policy_exits_2(self, tmp_path):
+        # Not in the brief's Step 1, added to prove the bad-policy exit-2 path (which
+        # otherwise has no coverage): a nonexistent --policy file must surface PolicyError
+        # via check, distinctly from the bad-baseline and incompatible-modes paths.
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+                "--policy",
+                str(tmp_path / "ghost_policy.yaml"),
+            ],
+        )
+        assert result.exit_code == 2
+        assert "Cannot read policy file" in result.output
+
+    def test_check_evaluation_failure_exits_2(self, tmp_path):
+        # Not in the brief's Step 1, added to prove the generic-evaluation-failure exit-2
+        # path: an unknown provider makes _build_chatbot raise a bare KeyError (no network
+        # call — config.yaml simply has no "ghost_provider" entry), which check's broad
+        # except must convert to exit 2 rather than letting it propagate as a crash.
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "ghost_provider",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 2
+        assert "Evaluation failed" in result.output
+
+    def test_check_bad_datasets_reraises_typer_exit_untouched(self, tmp_path):
+        # Not in the brief's Step 1, added to prove the `except typer.Exit: raise` line:
+        # a bad --datasets value already exits 2 via _select_datasets's own typer.Exit(2),
+        # and check must re-raise it untouched rather than let the broad `except Exception`
+        # below also catch it and print a spurious extra "Evaluation failed:" line.
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "nope",
+                "--results-dir",
+                str(results_dir),
+            ],
+        )
+        assert result.exit_code == 2
+        assert "Unknown dataset" in result.output
+        assert "Evaluation failed" not in result.output
+
+    def test_check_missing_gated_metric_exits_2(self, tmp_path):
+        # Not in the brief's Step 1, added to prove the missing_gated_metrics ordering:
+        # this policy gates a metric the mock run never produces, so missing_gated_metrics
+        # is non-empty AND verdict.passed is False. If the CLI checked verdict.passed
+        # first, this would exit 1 instead of 2 — assert the specific code to catch that.
+        results_dir, baseline_path = self._run_and_save_baseline(tmp_path)
+        policy_path = tmp_path / "gate.yaml"
+        policy_path.write_text("gate:\n  metrics:\n    ragas.answer_relevancy: {max_regression: 0.1}\n")
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--baseline",
+                str(baseline_path),
+                "--provider",
+                "mock",
+                "--datasets",
+                "safety",
+                "--results-dir",
+                str(results_dir),
+                "--policy",
+                str(policy_path),
+            ],
+        )
+        assert result.exit_code == 2
+        assert "Gated metric not comparable" in result.output
+        assert "ragas.answer_relevancy" in result.output
