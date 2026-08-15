@@ -55,6 +55,7 @@ _ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 RESULTS_DIR = os.path.join(_ROOT_DIR, "results")
 DATASETS_DIR = os.path.join(_ROOT_DIR, "datasets")
 CONFIG_PATH = os.path.join(_ROOT_DIR, "config", "config.yaml")
+BASELINES_DIR = os.path.join(_ROOT_DIR, "baselines")
 
 
 # ── Config Loading (cached) ──────────────────────────────────────────────────
