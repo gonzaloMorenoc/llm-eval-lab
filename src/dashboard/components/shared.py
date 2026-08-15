@@ -76,29 +76,49 @@ def load_config() -> dict:
 # ── Run Listing ───────────────────────────────────────────────────────────────
 
 
+@st.cache_data(show_spinner=False)
+def _read_report(path: str, mtime: float) -> dict | None:
+    """Parse one run's ``report.json``, or ``None`` if it cannot be read.
+
+    ``mtime`` is part of the cache key rather than the function body: it is what
+    makes an overwritten report reload immediately. A TTL would instead choose
+    between serving stale data and re-parsing files that never changed.
+    """
+    try:
+        with open(path) as f:
+            data: dict = json.load(f)
+        return data
+    except Exception as e:
+        logger.warning("Failed to load run %s: %s", path, e)
+        return None
+
+
 def list_runs() -> list[dict]:
     """List all evaluation runs from the results directory, newest first.
 
     Also includes the latest in-memory run from session state if not yet
     persisted to disk (happens right after running an evaluation).
+
+    Directory scanning stays uncached (a ``listdir`` plus one ``stat`` per run)
+    so a newly written run shows up without anyone clearing a cache; only the
+    expensive part — parsing each report, which carries every test result — is
+    memoised.
     """
     runs: list[dict] = []
     if os.path.isdir(RESULTS_DIR):
         for run_id in sorted(os.listdir(RESULTS_DIR), reverse=True):
             json_path = os.path.join(RESULTS_DIR, run_id, "report.json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path) as f:
-                        data = json.load(f)
-                    data["_run_id"] = run_id
-                    runs.append(data)
-                except Exception as e:
-                    logger.warning("Failed to load run %s: %s", run_id, e)
+            try:
+                mtime = os.path.getmtime(json_path)
+            except OSError:
+                continue  # directory without a report.json
+            data = _read_report(json_path, mtime)
+            if data is not None:
+                runs.append({**data, "_run_id": run_id})
     # Include the latest in-memory run if not already in the list
     last = st.session_state.get("last_summary")
     if last and not any(r.get("run_id") == last.get("run_id") for r in runs):
-        last["_run_id"] = last.get("run_id", "latest")
-        runs.insert(0, last)
+        runs.insert(0, {**last, "_run_id": last.get("run_id", "latest")})
     return runs
 
 

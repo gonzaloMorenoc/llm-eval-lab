@@ -15,7 +15,7 @@ A comprehensive QA framework for evaluating AI chatbots — functional tests, sa
 - **Interactive dashboard** with Streamlit: run evaluations, explore results, compare runs, manage test cases
 - **Regression gate for CI/CD**: `llm-eval-lab check` compares a run against a committed baseline with paired bootstrap statistics and breaks the build on significant regressions; reusable GitHub Action included
 - **Automated CI/CD** with GitHub Actions: ruff lint + format, mypy, pytest matrix on Python 3.11/3.12/3.13 with an 80% coverage gate
-- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (91% coverage), secret redaction on everything persisted, HTML-escape guards around dashboard rendering
+- **Code quality**: ruff (linting + formatting), mypy (type checking), pytest-cov (92% coverage), secret redaction on everything persisted, HTML-escape guards around dashboard rendering
 
 ## Architecture
 
@@ -114,6 +114,7 @@ llm-eval-lab/
 │   │   └── policy.py            # Load a gate policy YAML and evaluate the final verdict
 │   ├── runner/
 │   │   ├── models.py            # Pydantic models (TestCase, RunSummary, etc.)
+│   │   ├── execution.py         # run_samples(): run the suite N times and persist each report
 │   │   └── runner.py            # Async orchestrator with retry logic
 │   ├── reporting/
 │   │   ├── json_reporter.py     # JSON report generator
@@ -126,6 +127,7 @@ llm-eval-lab/
 │       │   ├── shared.py        # Run listing, HTML escaping, shared constants
 │       │   ├── styles.py        # CSS injection and layout primitives
 │       │   ├── charts.py        # Plotly chart components
+│       │   ├── stability.py     # Which cases disagree with themselves across samples
 │       │   └── metrics.py       # KPI cards and badges
 │       └── pages/
 │           ├── 1_run.py         # Run Evaluation page
@@ -140,7 +142,8 @@ llm-eval-lab/
 │   ├── test_chatbots.py         # Chatbot adapter tests
 │   ├── test_cli.py              # CLI tests (typer's CliRunner, mock provider)
 │   ├── test_config.py           # Config loader tests (LRU cache correctness)
-│   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs())
+│   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs(), report cache)
+│   ├── test_dashboard_stability.py # Multi-sample stability view tests
 │   ├── test_deepeval_evaluator.py # DeepEval evaluator logic tests
 │   ├── test_evaluators.py       # Evaluator tests (rule-based, safety, consistency)
 │   ├── test_gate_baseline.py    # Baseline build/hash/save/load tests
@@ -158,6 +161,7 @@ llm-eval-lab/
 │   ├── test_reporting.py        # Report generation tests
 │   ├── test_runner.py           # Runner and dataset loading tests
 │   ├── test_runner_errors.py    # Runner error-path tests (retries, malformed datasets, evaluator failures)
+│   ├── test_runner_execution.py # run_samples() tests (per-sample persistence, global progress)
 │   └── test_runner_safety_helpers.py # Secret redaction and error-classification helper tests
 ├── .github/workflows/ci.yml     # CI/CD pipeline (lint, test, gate-dogfood)
 └── pyproject.toml               # Dependencies, ruff, mypy, pytest config
@@ -181,7 +185,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 384 tests using mock chatbots with coverage report (gate: ≥80%).
+Runs 405 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -191,7 +195,9 @@ streamlit run src/dashboard/app.py
 
 The dashboard lets you:
 - Configure provider, mode, and evaluators visually
-- Launch evaluation runs with live progress
+- Launch evaluation runs with live per-case progress
+- Run the suite several times (`Muestras`) and see which cases are unstable —
+  passing in some samples and failing in others
 - Explore results with interactive charts and filters
 - Compare runs side-by-side
 - Manage test case datasets
@@ -520,7 +526,7 @@ Reports are generated in `results/{run_id}/`:
 ### Run tests
 
 ```bash
-pytest                          # 384 tests with coverage report
+pytest                          # 405 tests with coverage report
 pytest -x                       # Stop on first failure
 pytest tests/test_evaluators.py # Run specific test file
 pytest -k "safety"              # Run tests matching keyword

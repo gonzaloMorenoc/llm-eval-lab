@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multi-sample runs from the dashboard.** A `Muestras` slider in the sidebar
+  runs the suite N times, and the Run page then reports *stability*: which cases
+  passed in some samples and failed in others, with their per-sample pattern
+  (`✅❌✅`). A case that contradicts itself is the one that breaks a build
+  without anyone changing anything, and it was previously only visible by
+  reading `--samples` output in a terminal.
+- `src/runner/execution.py` — `run_samples()`, the single implementation of "run
+  the suite N times and persist each report", now shared by the CLI's
+  `--samples` and the dashboard so the two cannot drift apart.
+- `src/dashboard/components/stability.py` — pure helpers behind the stability
+  view (`unstable_case_rows`, `sample_pattern`, `stability_headline`).
+
+### Changed
+- **The dashboard's progress bar reflects real progress.** It was created at 0%
+  and set to 100% after `asyncio.run(...)` returned, so it never moved while 43
+  test cases ran. `EvalRunner.run()` now takes an optional
+  `on_progress(completed, total)` callback — fired once per finished case, and
+  counted across every sample — which the Run page renders as
+  `Evaluando… 12/129 casos`. A callback that raises is logged and the run
+  continues: a broken progress display must not discard an evaluation whose API
+  calls are already paid for.
+- **`list_runs()` no longer re-parses every report on each rerun.** Each page
+  called it on every interaction and each `report.json` carries its full
+  `results` array. Report parsing is now memoised on `(path, mtime)`; directory
+  scanning stays uncached, so a new run still appears immediately and an
+  overwritten report reloads at once — which a TTL cache could not do without
+  either serving stale data or re-reading unchanged files.
+
 ### Fixed
 - **DeepEval dropped `answer_relevancy` whenever a test case had no
   `reference`.** The metric scores input-vs-output and never reads

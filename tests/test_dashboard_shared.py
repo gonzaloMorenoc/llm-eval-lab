@@ -45,10 +45,11 @@ class TestListRuns:
         from src.dashboard.components import shared
 
         monkeypatch.setattr(shared, "RESULTS_DIR", str(tmp_path))
-        # ``st.session_state`` is process-wide; we don't touch the real one.
+        # ``st.session_state`` and the report cache are both process-wide.
         import streamlit as st
 
         st.session_state.clear()
+        st.cache_data.clear()
         return tmp_path
 
     def _write_run(self, root: Path, run_id: str, payload: dict) -> None:
@@ -91,6 +92,82 @@ class TestListRuns:
         # The bad run is silently skipped; the good one comes through; a warning was logged.
         assert [r["run_id"] for r in runs] == ["good"]
         assert any("Failed to load run" in rec.message for rec in caplog.records)
+
+
+class TestListRunsCaching:
+    """Every page calls ``list_runs()`` on every rerun, and each report carries
+    its full ``results`` array. Without caching, a dashboard with many runs
+    re-parses megabytes of JSON on each interaction.
+    """
+
+    @pytest.fixture
+    def fake_results_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        from src.dashboard.components import shared
+
+        monkeypatch.setattr(shared, "RESULTS_DIR", str(tmp_path))
+        import streamlit as st
+
+        st.session_state.clear()
+        st.cache_data.clear()
+        return tmp_path
+
+    @pytest.fixture
+    def count_report_reads(self, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+        """Count real filesystem opens of report.json (the spy wraps the real
+        ``open``, so what is asserted is genuine disk access, not a mock)."""
+        opened: list[str] = []
+        real_open = open
+
+        def counting_open(path, *args, **kwargs):  # type: ignore[no-untyped-def]
+            if str(path).endswith("report.json"):
+                opened.append(str(path))
+            return real_open(path, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.open", counting_open)
+        return opened
+
+    def _write_run(self, root: Path, run_id: str, payload: dict) -> Path:
+        run_dir = root / run_id
+        run_dir.mkdir(exist_ok=True)
+        path = run_dir / "report.json"
+        path.write_text(json.dumps(payload))
+        return path
+
+    def test_reads_each_report_from_disk_only_once(self, fake_results_dir: Path, count_report_reads: list[str]) -> None:
+        from src.dashboard.components.shared import list_runs
+
+        self._write_run(fake_results_dir, "20260601T100000_aaaaaaaa", {"run_id": "a", "pass_rate": 0.9})
+
+        list_runs()
+        list_runs()
+        list_runs()
+
+        assert len(count_report_reads) == 1, f"report.json was read {len(count_report_reads)} times"
+
+    def test_picks_up_a_report_rewritten_on_disk(self, fake_results_dir: Path) -> None:
+        """Invalidation is keyed on mtime, so an overwritten report must surface
+        immediately — a plain TTL cache would keep serving the stale one."""
+        import os
+
+        from src.dashboard.components.shared import list_runs
+
+        path = self._write_run(fake_results_dir, "20260601T100000_aaaaaaaa", {"run_id": "a", "pass_rate": 0.5})
+        assert list_runs()[0]["pass_rate"] == 0.5
+
+        path.write_text(json.dumps({"run_id": "a", "pass_rate": 0.95}))
+        stat = os.stat(path)
+        os.utime(path, (stat.st_atime + 10, stat.st_mtime + 10))
+
+        assert list_runs()[0]["pass_rate"] == 0.95
+
+    def test_a_new_run_appears_without_clearing_the_cache(self, fake_results_dir: Path) -> None:
+        from src.dashboard.components.shared import list_runs
+
+        self._write_run(fake_results_dir, "20260601T100000_aaaaaaaa", {"run_id": "first"})
+        assert [r["run_id"] for r in list_runs()] == ["first"]
+
+        self._write_run(fake_results_dir, "20260601T120000_bbbbbbbb", {"run_id": "second"})
+        assert [r["run_id"] for r in list_runs()] == ["second", "first"]
 
 
 class TestAppendJsonl:

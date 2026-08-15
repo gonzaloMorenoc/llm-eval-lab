@@ -188,3 +188,44 @@ class TestEvalRunner:
         evaluator_names = [e.evaluator for e in result.evaluations]
         assert "rule_based" in evaluator_names
         assert "consistency" in evaluator_names
+
+
+class TestRunProgress:
+    """``on_progress`` lets a UI follow a run that would otherwise be opaque
+    until it finishes (the dashboard's progress bar used to jump 0 → 100)."""
+
+    @pytest.fixture
+    def plain_evaluators(self):
+        return {"rule_based": RuleBasedEvaluator()}
+
+    async def test_reports_completed_count_once_per_case(self, mock_chatbot: MockChatbot, plain_evaluators: dict):
+        cases = load_all_datasets()
+        calls: list[tuple[int, int]] = []
+
+        runner = EvalRunner(chatbot=mock_chatbot, evaluators=plain_evaluators)
+        await runner.run(cases, on_progress=lambda done, total: calls.append((done, total)))
+
+        # Cases finish out of order under concurrency, but the count only ever
+        # climbs, one step per case, and the total never moves.
+        assert [done for done, _ in calls] == list(range(1, len(cases) + 1))
+        assert {total for _, total in calls} == {len(cases)}
+
+    async def test_a_failing_callback_does_not_abort_the_run(self, mock_chatbot: MockChatbot, plain_evaluators: dict, caplog):
+        """A broken progress bar must not throw away an evaluation that has
+        already spent its API calls."""
+        cases = load_all_datasets()
+
+        def exploding(done: int, total: int) -> None:
+            raise RuntimeError("progress bar blew up")
+
+        runner = EvalRunner(chatbot=mock_chatbot, evaluators=plain_evaluators)
+        summary = await runner.run(cases, on_progress=exploding)
+
+        assert summary.total == len(cases)
+        assert "progress bar blew up" in caplog.text
+
+    async def test_run_without_a_callback_is_unchanged(self, mock_chatbot: MockChatbot, plain_evaluators: dict, functional_test_case):
+        runner = EvalRunner(chatbot=mock_chatbot, evaluators=plain_evaluators)
+        summary = await runner.run([functional_test_case])
+
+        assert summary.total == 1
