@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 
 from src.gate.baseline import BaselineError, compute_dataset_hash, load_baseline
-from src.gate.models import BaselineFile
+from src.gate.models import BaselineFile, GatePolicy, GateVerdict
 from src.runner.models import TestCase
 
 logger = logging.getLogger(__name__)
@@ -111,3 +111,46 @@ def dataset_drift(baseline: BaselineFile, run_cases: Sequence[TestCase]) -> Drif
         baseline_hash=baseline.dataset_hash,
         current_hash=current_hash,
     )
+
+
+def verdict_rows(verdict: GateVerdict) -> list[dict[str, str]]:
+    """Metric table rows, mirroring the columns of the CI console report so the
+    two are recognisably the same table."""
+    return [
+        {
+            "Métrica": c.metric,
+            "Baseline": f"{c.baseline_mean:.4f}",
+            "Actual": f"{c.current_mean:.4f}",
+            "Regresión": f"{c.regression:+.4f}",
+            "IC 95%": f"[{c.ci_low:+.4f}, {c.ci_high:+.4f}]",
+            "p-valor": f"{c.p_value:.4f}",
+            "Gateada": "sí" if c.gated else "no",
+            "Veredicto": "❌ regresión" if c.breaches else "✅ ok",
+        }
+        for c in verdict.comparisons
+    ]
+
+
+def blocking_reasons(verdict: GateVerdict, policy: GatePolicy) -> list[str]:
+    """Why the gate fails, in plain sentences.
+
+    Keeps the three causes apart on purpose. A metric that cannot be compared is
+    a configuration error — CI exits 2, not 1 — and reads nothing like a quality
+    regression.
+    """
+    reasons: list[str] = list(verdict.hard_rule_violations)
+
+    for c in verdict.comparisons:
+        if not c.breaches:
+            continue
+        limit = policy.metrics[c.metric].max_regression if c.metric in policy.metrics else None
+        limit_text = f", por encima del límite permitido ({limit:.2f})" if limit is not None else ""
+        reasons.append(f"«{c.metric}» empeora {c.regression:+.4f}{limit_text}.")
+
+    for metric in verdict.missing_gated_metrics:
+        reasons.append(
+            f"La métrica «{metric}» no se puede comparar: falta en alguno de los dos lados. "
+            "Es un error de configuración — en CI provoca exit 2, no un fallo de calidad."
+        )
+
+    return reasons

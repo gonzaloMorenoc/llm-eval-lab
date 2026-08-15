@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from src.dashboard.components.gate_view import dataset_drift, list_baselines
+from src.dashboard.components.gate_view import blocking_reasons, dataset_drift, list_baselines, verdict_rows
 from src.gate.baseline import build_baseline, save_baseline
+from src.gate.models import GatePolicy, GateVerdict, MetricComparison, MetricPolicy
 from src.runner.models import TestCase
 from tests.gate_helpers import make_summary
 
@@ -117,3 +118,96 @@ class TestDatasetDrift:
         report = dataset_drift(baseline, [_case("a", "changed too")])
 
         assert report.drifted is False
+
+
+def _comparison(metric: str, *, regression: float = 0.0, gated: bool = False, breaches: bool = False) -> MetricComparison:
+    return MetricComparison(
+        metric=metric,
+        baseline_mean=0.70,
+        current_mean=0.70 - regression,
+        regression=regression,
+        ci_low=-0.11,
+        ci_high=-0.04,
+        p_value=0.01,
+        n_cases=43,
+        significant=breaches,
+        gated=gated,
+        breaches=breaches,
+    )
+
+
+def _verdict(**kwargs) -> GateVerdict:
+    defaults = dict(
+        passed=True,
+        comparisons=[],
+        hard_rule_violations=[],
+        missing_gated_metrics=[],
+        new_case_ids=[],
+        removed_case_ids=[],
+        mean_flakiness=0.0,
+        samples=3,
+    )
+    return GateVerdict(**{**defaults, **kwargs})
+
+
+class TestVerdictRows:
+    def test_one_row_per_comparison(self) -> None:
+        verdict = _verdict(comparisons=[_comparison("pass_rate"), _comparison("rule_based")])
+
+        rows = verdict_rows(verdict)
+
+        assert [row["Métrica"] for row in rows] == ["pass_rate", "rule_based"]
+
+    def test_marks_which_metrics_are_gated(self) -> None:
+        verdict = _verdict(comparisons=[_comparison("pass_rate", gated=True), _comparison("rule_based", gated=False)])
+
+        rows = verdict_rows(verdict)
+
+        assert rows[0]["Gateada"] == "sí"
+        assert rows[1]["Gateada"] == "no"
+
+    def test_regression_keeps_its_sign(self) -> None:
+        verdict = _verdict(comparisons=[_comparison("pass_rate", regression=0.08)])
+
+        assert verdict_rows(verdict)[0]["Regresión"].startswith("+")
+
+    def test_no_comparisons_gives_no_rows(self) -> None:
+        assert verdict_rows(_verdict()) == []
+
+
+class TestBlockingReasons:
+    def test_a_passing_verdict_has_no_reasons(self) -> None:
+        assert blocking_reasons(_verdict(), GatePolicy()) == []
+
+    def test_reports_hard_rule_violations_verbatim(self) -> None:
+        verdict = _verdict(passed=False, hard_rule_violations=["New critical failures: safety_004"])
+
+        reasons = blocking_reasons(verdict, GatePolicy())
+
+        assert any("safety_004" in reason for reason in reasons)
+
+    def test_a_breaching_metric_quotes_its_limit(self) -> None:
+        verdict = _verdict(passed=False, comparisons=[_comparison("pass_rate", regression=0.08, gated=True, breaches=True)])
+        policy = GatePolicy(metrics={"pass_rate": MetricPolicy(max_regression=0.05)})
+
+        reasons = blocking_reasons(verdict, policy)
+
+        assert len(reasons) == 1
+        assert "pass_rate" in reasons[0]
+        assert "0.05" in reasons[0]
+
+    def test_a_non_breaching_metric_is_not_a_reason(self) -> None:
+        verdict = _verdict(passed=False, comparisons=[_comparison("rule_based", regression=0.01)])
+
+        assert blocking_reasons(verdict, GatePolicy()) == []
+
+    def test_missing_gated_metric_is_not_worded_as_a_regression(self) -> None:
+        """In CI this is exit 2, a configuration error — the exact case that
+        produced a false PASS in PR #11 when an evaluator silently dropped out."""
+        verdict = _verdict(passed=False, missing_gated_metrics=["pass_rate"])
+
+        reasons = blocking_reasons(verdict, GatePolicy())
+
+        assert len(reasons) == 1
+        assert "regres" not in reasons[0].lower()
+        assert "compar" in reasons[0].lower()
