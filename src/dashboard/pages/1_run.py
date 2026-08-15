@@ -154,6 +154,7 @@ provider = st.session_state.get("selected_provider", "mock")
 mode = st.session_state.get("selected_mode", "plain")
 active_evals = st.session_state.get("active_evaluators", ["rule_based", "safety"])
 max_concurrent = st.session_state.get("max_concurrent", 5)
+samples = st.session_state.get("samples", 1)
 
 eval_descriptions = {
     "rule_based": ("📏", "Rule-Based", "Verificaciones deterministas: longitud, keywords, latencia."),
@@ -208,12 +209,14 @@ with cfg_cols[2]:
         unsafe_allow_html=True,
     )
 with cfg_cols[3]:
+    samples_line = f"{samples} muestras · mide estabilidad" if samples > 1 else "1 muestra · sin medida de estabilidad"
     st.markdown(
         f"""
         <div class="stat-card" style="border-left:3px solid #64748b;">
             <div class="stat-label">⚙️ Concurrencia</div>
             <div style="font-size:1.5rem; font-weight:700; color:#e2e8f0; margin-top:0.3rem;">{max_concurrent}</div>
             <div style="font-size:0.72rem; color:#64748b; margin-top:0.2rem;">tests paralelos</div>
+            <div style="font-size:0.72rem; color:#64748b; margin-top:0.2rem;">{samples_line}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -262,9 +265,11 @@ if not all_selected_cases:
 elif not active_evals:
     st.markdown(callout("Activa al menos un evaluador en la barra lateral.", kind="warning"), unsafe_allow_html=True)
 else:
+    executions = len(all_selected_cases) * samples
+    samples_detail = f" × <strong>{samples} muestras</strong> = {executions} ejecuciones" if samples > 1 else ""
     st.markdown(
         callout(
-            f"Todo listo · <strong>{len(all_selected_cases)} tests</strong> con "
+            f"Todo listo · <strong>{len(all_selected_cases)} tests</strong>{samples_detail} con "
             f"<strong>{len(active_evals)} evaluadores</strong> en modo <strong>{provider}/{mode}</strong>",
             kind="success",
             icon="✅",
@@ -350,26 +355,35 @@ if run_clicked:
         evaluators = _build_evaluators(active_evals)
         st.write(f"✅ {len(evaluators)} evaluadores listos")
 
-        st.write(f"⏳ Ejecutando **{len(all_selected_cases)}** test cases (concurrencia={max_concurrent})...")
+        samples_note = f" × {samples} muestras" if samples > 1 else ""
+        st.write(f"⏳ Ejecutando **{len(all_selected_cases)}** test cases{samples_note} (concurrencia={max_concurrent})...")
 
-        from src.runner.runner import EvalRunner
+        from src.runner.execution import run_samples
 
         config = st.session_state.get("config", {})
         config.setdefault("runner", {})["max_concurrent"] = max_concurrent
-        runner = EvalRunner(chatbot=chatbot, evaluators=evaluators, config=config)
 
-        progress = st.progress(0, text="Iniciando evaluación...")
-        summary = asyncio.run(runner.run(all_selected_cases))
+        progress = st.progress(0.0, text="Iniciando evaluación...")
+
+        def _report_progress(done: int, total: int) -> None:
+            progress.progress(done / total, text=f"Evaluando… {done}/{total} casos")
+
+        results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "results"))
+        summaries = asyncio.run(
+            run_samples(
+                chatbot=chatbot,
+                evaluators=evaluators,
+                test_cases=all_selected_cases,
+                results_dir=results_dir,
+                samples=samples,
+                config=config,
+                on_progress=_report_progress,
+            )
+        )
+        summary = summaries[-1]
 
         elapsed = time.time() - start_time
-        progress.progress(100, text=f"¡Completado en {elapsed:.1f}s!")
-
-        results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "results", summary.run_id))
-        from src.reporting.json_reporter import generate_json_report
-        from src.reporting.markdown_reporter import generate_markdown_report
-
-        generate_json_report(summary, results_dir)
-        generate_markdown_report(summary, results_dir)
+        progress.progress(1.0, text=f"¡Completado en {elapsed:.1f}s!")
 
         status.update(label=f"✅ Evaluación completada en {elapsed:.1f}s", state="complete")
 
@@ -389,7 +403,7 @@ if run_clicked:
                 <div>
                     <div style="font-size:0.7rem; color:#6366f1; text-transform:uppercase; letter-spacing:0.1em; font-weight:700;">Run completado</div>
                     <div style="font-size:1rem; font-weight:700; color:#e2e8f0; margin-top:0.2rem;">{summary.run_id}</div>
-                    <div style="font-size:0.8rem; color:#64748b;">{summary.total} tests · {elapsed:.1f}s · {provider}/{mode}</div>
+                    <div style="font-size:0.8rem; color:#64748b;">{summary.total} tests{samples_note} · {elapsed:.1f}s · {provider}/{mode}</div>
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:2.5rem; font-weight:900; color:{pr_color};">{pr:.0%}</div>
@@ -435,6 +449,56 @@ if run_clicked:
             callout(f"Pass Rate de {pr:.0%}. Revisa los fallos para identificar áreas de mejora.", kind="tip"),
             unsafe_allow_html=True,
         )
+
+    # ── Stability across samples ──────────────────────────────────────────────
+    if len(summaries) > 1:
+        st.divider()
+        st.markdown(
+            """
+            <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">🎲 Estabilidad entre muestras</div>
+            <div class="metric-explain" style="margin-bottom:1rem;">
+                Un caso <strong>inestable</strong> pasa en unas ejecuciones y falla en otras con la misma pregunta.
+                No es un fallo del modelo en sí, sino una respuesta que cambia entre llamadas — y es justo lo que
+                rompe una build sin que nadie haya tocado nada.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        from src.dashboard.components.stability import stability_headline, unstable_case_rows
+        from src.gate.baseline import BaselineError, build_baseline
+
+        try:
+            _baseline = build_baseline(summaries)
+        except BaselineError as e:
+            st.markdown(
+                callout(f"No se pudo agregar las muestras: {e}", kind="warning"),
+                unsafe_allow_html=True,
+            )
+        else:
+            headline = stability_headline(_baseline)
+            rows = unstable_case_rows(_baseline)
+
+            if headline["unstable"] == 0:
+                st.markdown(
+                    callout(
+                        f"Los <strong>{headline['total']} casos</strong> dieron el mismo resultado en las "
+                        f"<strong>{headline['samples']} muestras</strong>. Nada inestable.",
+                        kind="success",
+                    ),
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    callout(
+                        f"<strong>{headline['unstable']} de {headline['total']} casos</strong> cambiaron de "
+                        f"resultado entre muestras (inestabilidad media {headline['mean_flakiness']:.2f}). "
+                        "Revísalos antes de usarlos como baseline: harán fallar el gate de forma intermitente.",
+                        kind="warning",
+                    ),
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(rows, use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -543,5 +607,6 @@ if run_clicked:
         )
 
     st.divider()
-    st.markdown(f"📁 Reportes guardados en `results/{summary.run_id}/`")
+    saved_paths = " · ".join(f"`results/{s.run_id}/`" for s in summaries)
+    st.markdown(f"📁 Reportes guardados en {saved_paths}")
     st.page_link("pages/2_results.py", label="📊 Ver Dashboard Completo de Resultados →", use_container_width=False)

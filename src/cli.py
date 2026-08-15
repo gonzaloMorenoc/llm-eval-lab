@@ -14,10 +14,9 @@ from src.gate.comparison import CompatibilityError
 from src.gate.models import GatePolicy
 from src.gate.policy import PolicyError, evaluate_gate, load_policy
 from src.reporting.gate_reporter import generate_gate_markdown, render_gate_console
-from src.reporting.json_reporter import generate_json_report
-from src.reporting.markdown_reporter import generate_markdown_report
+from src.runner.execution import run_samples
 from src.runner.models import RunSummary, TestCase
-from src.runner.runner import EvalRunner, load_all_datasets, load_dataset
+from src.runner.runner import load_all_datasets, load_dataset
 
 console = Console()
 app = typer.Typer(help="LLM Eval Lab — evaluate chatbots and gate quality regressions.")
@@ -140,17 +139,18 @@ async def _execute_runs(
     test_cases = _select_datasets(datasets_csv)
     _print_cost_estimate(len(test_cases), samples, set(evaluators.keys()))
 
-    summaries: list[RunSummary] = []
-    for i in range(samples):
-        if samples > 1:
-            console.print(f"\n[bold]Sample {i + 1}/{samples}[/bold]")
-        eval_runner = EvalRunner(chatbot=chatbot, evaluators=evaluators)
-        summary = await eval_runner.run(test_cases)
-        output_dir = os.path.join(results_dir, summary.run_id)
-        generate_json_report(summary, output_dir)
-        generate_markdown_report(summary, output_dir)
-        summaries.append(summary)
-    return summaries
+    def _announce(index: int, total: int) -> None:
+        if total > 1:
+            console.print(f"\n[bold]Sample {index}/{total}[/bold]")
+
+    return await run_samples(
+        chatbot=chatbot,
+        evaluators=evaluators,
+        test_cases=test_cases,
+        results_dir=results_dir,
+        samples=samples,
+        on_sample_start=_announce,
+    )
 
 
 def _fail_on_execution_errors(summaries: list[RunSummary]) -> None:

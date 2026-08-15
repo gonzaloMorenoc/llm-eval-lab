@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -255,8 +255,17 @@ class EvalRunner:
 
             return result
 
-    async def run(self, test_cases: list[TestCase]) -> RunSummary:
-        """Run all test cases and return a summary."""
+    async def run(
+        self,
+        test_cases: list[TestCase],
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> RunSummary:
+        """Run all test cases and return a summary.
+
+        ``on_progress(completed, total)`` is called once per finished case, for
+        callers that render their own progress (the dashboard cannot see the
+        rich progress bar below, which goes to the server's stdout).
+        """
         # Sortable + collision-resistant: yyyymmddTHHMMSS + 8 hex chars (~3e10 namespace).
         now = datetime.now(UTC)
         run_id = f"{now.strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -281,10 +290,21 @@ class EvalRunner:
             console=console,
         ) as progress:
             task = progress.add_task("Evaluating...", total=len(test_cases))
+            completed = 0
+            total_cases = len(test_cases)
 
             async def _run_and_track(tc: TestCase) -> TestResult:
+                nonlocal completed
                 r = await self._run_single(tc, semaphore)
                 progress.advance(task)
+                completed += 1
+                if on_progress is not None:
+                    try:
+                        on_progress(completed, total_cases)
+                    except Exception:
+                        # A caller's broken progress display must not discard an
+                        # evaluation whose API calls are already paid for.
+                        logger.exception("Progress callback failed")
                 return r
 
             tasks = [_run_and_track(tc) for tc in test_cases]

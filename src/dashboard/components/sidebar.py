@@ -235,10 +235,23 @@ def render_sidebar() -> dict:
             help="Tiempo máximo de espera por respuesta. Aumenta si el proveedor es lento.",
         )
 
+        samples = st.slider(
+            "Muestras",
+            min_value=1,
+            max_value=10,
+            value=1,
+            key="runner_samples",
+            help=(
+                "Cuántas veces se ejecuta la suite completa. Más de una revela qué casos "
+                "son inestables (pasan unas veces y otras no). Multiplica las llamadas a la API."
+            ),
+        )
+
+        samples_note = f" · {samples} muestras" if samples > 1 else ""
         st.markdown(
             f"""
             <div style="font-size:0.75rem; color:#64748b; margin-top:0.25rem;">
-                {max_concurrent} tests paralelos · {timeout // 1000}s timeout
+                {max_concurrent} tests paralelos · {timeout // 1000}s timeout{samples_note}
             </div>
             """,
             unsafe_allow_html=True,
@@ -284,6 +297,7 @@ def render_sidebar() -> dict:
     st.session_state["active_evaluators"] = active_evals
     st.session_state["max_concurrent"] = max_concurrent
     st.session_state["timeout_ms"] = timeout
+    st.session_state["samples"] = samples
 
     return {
         "provider": provider,
@@ -291,5 +305,6 @@ def render_sidebar() -> dict:
         "evaluators": active_evals,
         "max_concurrent": max_concurrent,
         "timeout_ms": timeout,
+        "samples": samples,
         "config": config,
     }
