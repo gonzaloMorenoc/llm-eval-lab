@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Quality Gate page in the dashboard.** The gate engine had been CLI-only: its
+  only trace in the UI was an unlabelled statistics table at the bottom of
+  Compare Runs. The page judges a stored run against a committed baseline and
+  explains the verdict, keeping the three failure causes distinct — a hard rule,
+  a breaching metric, and a gated metric that cannot be compared. That last one
+  is a configuration error (exit 2 in CI), not a quality regression, and it is
+  the case that produced a false PASS in the gate's first release; wording it
+  like a regression in the UI would repeat that mistake. Baselines can be listed
+  and created from the page, and the policy can be simulated — moving a threshold
+  re-evaluates the verdict in memory and never writes `config/gate.yaml`.
+- **`dataset_hash` finally has a reader.** Written into every baseline since the
+  gate landed but never read, so a test case whose text changed while keeping its
+  id was silently compared against a stale baseline entry. The page now warns.
+  The hash is recomputed over the baseline's own case ids against the cases
+  stored in the run's report — not against `datasets/` on disk, which would flag
+  every baseline built from a subset of datasets and produce an alarm so frequent
+  it would be ignored.
 - **Multi-sample runs from the dashboard.** A `Muestras` slider in the sidebar
   runs the suite N times, and the Run page then reports *stability*: which cases
   passed in some samples and failed in others, with their per-sample pattern
