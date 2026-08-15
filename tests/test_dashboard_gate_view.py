@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from src.dashboard.components.gate_view import list_baselines
+from src.dashboard.components.gate_view import dataset_drift, list_baselines
 from src.gate.baseline import build_baseline, save_baseline
+from src.runner.models import TestCase
 from tests.gate_helpers import make_summary
 
 
@@ -52,3 +53,67 @@ class TestListBaselines:
         (tmp_path / "README.md").write_text("not a baseline")
 
         assert [b.name for b in list_baselines(str(tmp_path))] == ["main"]
+
+
+def _case(case_id: str, text: str = "q") -> TestCase:
+    return TestCase(
+        id=case_id,
+        category="functional",
+        input=text,
+        expected_behavior="answers",
+        evaluation_type=["rule_based"],
+        severity="medium",
+    )
+
+
+def _baseline_over(case_ids: list[str], text: str = "q"):
+    """Baseline built from a run covering exactly ``case_ids``."""
+    summary = make_summary({cid: {"rule_based": 0.9} for cid in case_ids})
+    for result in summary.results:
+        result.test_case.input = text
+    return build_baseline([summary])
+
+
+class TestDatasetDrift:
+    def test_identical_cases_show_no_drift(self) -> None:
+        baseline = _baseline_over(["a", "b"])
+
+        report = dataset_drift(baseline, [_case("a"), _case("b")])
+
+        assert report.comparable is True
+        assert report.drifted is False
+
+    def test_same_id_with_changed_text_is_drift(self) -> None:
+        baseline = _baseline_over(["a", "b"])
+
+        report = dataset_drift(baseline, [_case("a", "a completely different question"), _case("b")])
+
+        assert report.comparable is True
+        assert report.drifted is True
+
+    def test_a_run_covering_extra_cases_is_not_drift(self) -> None:
+        """The hash is computed over the baseline's ids only. Hashing the whole
+        current dataset would flag every baseline built from a subset — a normal
+        usage — and an alarm that fires almost always gets ignored."""
+        baseline = _baseline_over(["a", "b"])
+
+        report = dataset_drift(baseline, [_case("a"), _case("b"), _case("c"), _case("d")])
+
+        assert report.comparable is True
+        assert report.drifted is False
+
+    def test_a_missing_id_makes_it_not_comparable(self) -> None:
+        baseline = _baseline_over(["a", "b"])
+
+        report = dataset_drift(baseline, [_case("a")])
+
+        assert report.comparable is False
+        assert report.missing_ids == ["b"]
+        assert report.current_hash is None
+
+    def test_not_comparable_is_never_reported_as_drift(self) -> None:
+        baseline = _baseline_over(["a", "b"])
+
+        report = dataset_drift(baseline, [_case("a", "changed too")])
+
+        assert report.drifted is False
