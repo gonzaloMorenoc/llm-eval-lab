@@ -129,6 +129,7 @@ llm-eval-lab/
 │       │   ├── charts.py        # Plotly chart components
 │       │   ├── stability.py     # Which cases disagree with themselves across samples
 │       │   ├── gate_view.py     # Quality Gate logic (baselines, dataset drift, verdict rows)
+│       │   ├── export.py        # CSV builders behind the download buttons
 │       │   └── metrics.py       # KPI cards and badges
 │       └── pages/
 │           ├── 1_run.py         # Run Evaluation page
@@ -144,6 +145,8 @@ llm-eval-lab/
 │   ├── test_chatbots.py         # Chatbot adapter tests
 │   ├── test_cli.py              # CLI tests (typer's CliRunner, mock provider)
 │   ├── test_config.py           # Config loader tests (LRU cache correctness)
+│   ├── test_dashboard_charts.py # Trend chart ordering and labelling tests
+│   ├── test_dashboard_export.py # CSV export tests (escaping, missing fields)
 │   ├── test_dashboard_gate_view.py # Quality Gate page logic tests (baselines, drift, verdict)
 │   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs(), report cache)
 │   ├── test_dashboard_stability.py # Multi-sample stability view tests
@@ -188,7 +191,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 424 tests using mock chatbots with coverage report (gate: ≥80%).
+Runs 439 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -201,7 +204,9 @@ The dashboard lets you:
 - Launch evaluation runs with live per-case progress
 - Run the suite several times (`Muestras`) and see which cases are unstable —
   passing in some samples and failing in others
+- See pass rate evolve across runs, overall and per category
 - Explore results with interactive charts and filters
+- Download any run as CSV, JSON or Markdown
 - Compare runs side-by-side
 - Judge a run against a committed baseline with the same gate CI uses, see why it
   passes or fails, and simulate other policy thresholds without touching `gate.yaml`
@@ -531,7 +536,7 @@ Reports are generated in `results/{run_id}/`:
 ### Run tests
 
 ```bash
-pytest                          # 424 tests with coverage report
+pytest                          # 439 tests with coverage report
 pytest -x                       # Stop on first failure
 pytest tests/test_evaluators.py # Run specific test file
 pytest -k "safety"              # Run tests matching keyword

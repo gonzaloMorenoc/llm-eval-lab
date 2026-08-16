@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pass rate trend on the home page.** Every run is a point, oldest to newest,
+  with one line per category plus an overall line — the same data the run history
+  table already showed, in the shape that answers "are we getting better or
+  worse?".
+- **Downloads from the dashboard.** Results serves a run's `report.json` and
+  `report.md` straight from disk plus a generated CSV (one row per test case);
+  Compare Runs exports its statistical table. Both were previously reachable only
+  by digging through `results/` in a file manager.
+- `src/dashboard/components/export.py` — CSV builders. Uses the `csv` module
+  rather than string joins because test case text contains commas, quotes and
+  newlines, any of which would otherwise shift columns.
+
 - **Quality Gate page in the dashboard.** The gate engine had been CLI-only: its
   only trace in the UI was an unlabelled statistics table at the bottom of
   Compare Runs. The page judges a stored run against a committed baseline and
@@ -54,6 +66,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   either serving stale data or re-reading unchanged files.
 
 ### Fixed
+- **`category_trend_chart` had never worked.** It passed `height=380` alongside
+  `**_LAYOUT_DEFAULTS`, which already sets `height`, so it raised `TypeError` on
+  any non-empty input. Nothing ever called it, so nothing ever noticed. It now
+  also sorts chronologically itself: `list_runs()` returns newest first, so the
+  obvious way to call it would have drawn time backwards and shown decline as
+  improvement.
 - **DeepEval dropped `answer_relevancy` whenever a test case had no
   `reference`.** The metric scores input-vs-output and never reads
   `expected_output`, so it was listed in `_REFERENCE_REQUIRED` by mistake. All

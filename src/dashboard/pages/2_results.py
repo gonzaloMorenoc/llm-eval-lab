@@ -18,8 +18,9 @@ from src.dashboard.components.charts import (
     score_distribution_chart,
     severity_pie_chart,
 )
+from src.dashboard.components.export import results_to_csv
 from src.dashboard.components.metrics import kpi_row, score_bar, severity_icon
-from src.dashboard.components.shared import list_runs
+from src.dashboard.components.shared import RESULTS_DIR, list_runs
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import badge, callout, inject_css, page_header, stat_card
 
@@ -60,6 +61,54 @@ run_labels = [
 ]
 selected_idx = st.selectbox("📁 Seleccionar Run", range(len(runs)), format_func=lambda i: run_labels[i])
 summary = runs[selected_idx]
+
+# ── Downloads ─────────────────────────────────────────────────────────────────
+_run_id = summary.get("run_id", "run")
+_run_dir = os.path.join(RESULTS_DIR, _run_id)
+
+
+def _read_artifact(filename: str) -> str | None:
+    """Report artifacts already exist on disk; serve them instead of rebuilding."""
+    path = os.path.join(_run_dir, filename)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+dl_cols = st.columns([1, 1, 1, 3])
+with dl_cols[0]:
+    st.download_button(
+        "⬇️ CSV",
+        data=results_to_csv(summary),
+        file_name=f"{_run_id}_results.csv",
+        mime="text/csv",
+        use_container_width=True,
+        help="Una fila por test case: id, categoría, severidad, resultado, score, latencia y evaluadores.",
+    )
+with dl_cols[1]:
+    _json_report = _read_artifact("report.json")
+    st.download_button(
+        "⬇️ JSON",
+        data=_json_report or "",
+        file_name=f"{_run_id}_report.json",
+        mime="application/json",
+        use_container_width=True,
+        disabled=_json_report is None,
+        help="Informe completo tal cual se persistió." if _json_report else "No se encontró report.json en disco.",
+    )
+with dl_cols[2]:
+    _md_report = _read_artifact("report.md")
+    st.download_button(
+        "⬇️ Markdown",
+        data=_md_report or "",
+        file_name=f"{_run_id}_report.md",
+        mime="text/markdown",
+        use_container_width=True,
+        disabled=_md_report is None,
+        help="Informe legible, listo para pegar en un PR." if _md_report else "No se encontró report.md en disco.",
+    )
 
 st.divider()
 
