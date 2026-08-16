@@ -92,22 +92,36 @@ cambiar, y mezclarlo con la fase de píxel idéntico invalidaría la comparació
 
 ## 4. Verificación
 
-### Fase 1 — tokens: comparación de píxeles
+### Fase 1 — tokens: comparación del estilo aplicado
 
 1. Con main, capturar el cuerpo (`stMain`) de las 6 vistas (Home, Run, Results, Compare,
    Test Cases, Gate) a viewport fijo, esperando al contenido para evitar estados de
-   carga.
+   carga. De cada una se guardan dos cosas: el PNG y el HTML renderizado.
 2. Aplicar el refactor y repetir la captura en las mismas condiciones.
-3. Comparar con PIL + numpy. **Diferencia distinta de cero = fallo a investigar**, no
-   detalle aceptable.
+3. Comparar.
 
-El arnés de capturas es utillaje de scratchpad, no se commitea: necesita servidor en
-marcha y navegador, y no es ejecutable en CI. La evidencia (conteo de píxeles distintos
-por página) se documenta en la PR.
+**Corregido tras medirlo.** El plan original era comparar píxeles con el criterio
+«cualquier diferencia es un fallo». Ese criterio no se sostiene: capturando dos veces
+*sin tocar el código*, hasta 74 píxeles por página difieren por antialiasing de bordes
+redondeados y reposicionamiento subpíxel de las anotaciones de Plotly. Un umbral de
+tolerancia sería subjetivo justo donde hace falta precisión.
 
-Riesgo de falso positivo: contenido no determinista en las capturas. Los runs guardados
-son estables y las páginas se capturan en reposo; si aun así una página difiere, se
-inspecciona la imagen diferencia antes de concluir nada.
+La medida exacta es otra: **de cada página se extraen los atributos `style`, los
+atributos de pintado SVG (`fill`, `stroke`, `stop-color`) y las reglas CSS inyectadas,
+se ordenan y se comparan como texto**. Eso es exactamente lo que este refactor puede
+romper, y no tiene ruido. Comparar el DOM entero tampoco vale: Plotly genera hashes por
+figura, BaseWeb lleva un contador global y las clases de emotion cambian entre sesiones.
+
+Criterio: **el estilo aplicado debe ser idéntico carácter a carácter en las 6 vistas**.
+Los píxeles se siguen comparando como señal secundaria, y cualquier diferencia se
+inspecciona visualmente antes de descartarla.
+
+Validación del propio instrumento: antes de refactorizar nada, se captura dos veces el
+mismo código y debe dar idéntico. Sin ese control, un arnés silencioso pasaría por
+«sin cambios».
+
+El arnés es utillaje de scratchpad, no se commitea: necesita servidor en marcha y
+navegador, y no es ejecutable en CI. La evidencia se documenta en la PR.
 
 ### Fase 2 — config.toml: a ojo
 

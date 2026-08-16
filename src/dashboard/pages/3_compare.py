@@ -16,6 +16,7 @@ from src.dashboard.components.metrics import severity_icon
 from src.dashboard.components.shared import RESULTS_DIR, list_runs
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import callout, inject_css, page_header
+from src.dashboard.components.theme import PALETTE
 from src.gate.baseline import build_baseline
 from src.gate.models import GatePolicy
 from src.gate.policy import evaluate_gate
@@ -101,11 +102,11 @@ st.divider()
 
 # ── KPI Comparison ────────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.5rem;">
+    f"""
+    <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.5rem;">
         📊 Comparación de Indicadores Clave
     </div>
-    <div style="font-size:0.82rem; color:#64748b; margin-bottom:1rem;">
+    <div style="font-size:0.82rem; color:{PALETTE["text_muted"]}; margin-bottom:1rem;">
         Las tarjetas muestran el delta entre A y B. El borde indica qué run ganó cada métrica.
     </div>
     """,
@@ -143,14 +144,14 @@ for i, (name, key, higher_is_better, fmt) in enumerate(kpi_keys):
         else:
             winner = "="
             arrow = "="
-            border_color = "#6b7280"
+            border_color = PALETTE["text_faint"]
             delta_color = COLORS["muted"]
 
         winner_text = "→ 🅱 gana" if winner == "B" else ("→ 🅰 gana" if winner == "A" else "Empate")
         st.markdown(
             f"""
             <div class="cmp-card" style="border-left:4px solid {border_color};">
-                <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.4rem;">{name}</div>
+                <div style="font-size:0.68rem; color:{PALETTE["text_soft"]}; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.4rem;">{name}</div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:0.3rem;">
                     <div style="text-align:center;">
                         <div style="font-size:0.65rem; color:{COLORS["primary"]}; font-weight:700;">🅰 A</div>
@@ -200,8 +201,8 @@ metrics_b.update(run_b.get("deepeval_aggregate", {}))
 
 if metrics_a or metrics_b:
     st.markdown(
-        """
-        <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">📐 Comparación de Métricas RAGAS / DeepEval</div>
+        f"""
+        <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.25rem;">📐 Comparación de Métricas RAGAS / DeepEval</div>
         <div class="metric-explain" style="margin-bottom:1rem;">
             Compara las métricas avanzadas entre los dos runs. Las diferencias en Faithfulness y Relevancy
             indican cambios significativos en la calidad del RAG.
@@ -287,8 +288,8 @@ st.divider()
 
 # ── Category Comparison ───────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">📂 Comparación por Categoría</div>
+    f"""
+    <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.25rem;">📂 Comparación por Categoría</div>
     <div class="metric-explain" style="margin-bottom:1rem;">
         Las barras de progreso muestran el Pass Rate de cada modelo por categoría.
         Diferencias grandes indican que un modelo es mejor en esa área específica.
@@ -308,13 +309,15 @@ if all_cats:
         b_rate = cats_b.get(cat, {}).get("pass_rate", 0)
         icon = cat_icons.get(cat, "📋")
         winner_hint = "🅰 Gana A" if a_rate > b_rate + 0.02 else ("🅱 Gana B" if b_rate > a_rate + 0.02 else "Empate")
-        winner_color = COLORS["primary"] if a_rate > b_rate + 0.02 else (COLORS["info"] if b_rate > a_rate + 0.02 else "#6b7280")
+        winner_color = (
+            COLORS["primary"] if a_rate > b_rate + 0.02 else (COLORS["info"] if b_rate > a_rate + 0.02 else PALETTE["text_faint"])
+        )
 
         st.markdown(
             f"""
             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
                 <span style="font-size:1rem;">{icon}</span>
-                <span style="font-size:0.9rem; font-weight:600; color:#e2e8f0;">{cat.replace("_", " ").title()}</span>
+                <span style="font-size:0.9rem; font-weight:600; color:{PALETTE["text"]};">{cat.replace("_", " ").title()}</span>
                 <span class="badge" style="background:rgba(99,102,241,0.1); color:{winner_color}; border-color:{winner_color};">{winner_hint}</span>
             </div>
             """,
@@ -331,8 +334,8 @@ st.divider()
 
 # ── Disagreements ─────────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">⚡ Desacuerdos Pass/Fail</div>
+    f"""
+    <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.25rem;">⚡ Desacuerdos Pass/Fail</div>
     <div class="metric-explain" style="margin-bottom:1rem;">
         Tests donde los dos runs difieren en el resultado (uno pasa, el otro falla).
         Estos casos revelan diferencias cualitativas entre los modelos.
@@ -368,30 +371,30 @@ if disagreements:
         with st.expander(f"{sev} **{tid}** — 🅰{icon_a} vs 🅱{icon_b}"):
             d_col1, d_col2 = st.columns(2)
             with d_col1:
-                outcome_color = "#22c55e" if ra.get("overall_passed") else "#ef4444"
+                outcome_color = PALETTE["success"] if ra.get("overall_passed") else PALETTE["danger"]
                 st.markdown(
                     f"""
                     <div style="border-left:3px solid {outcome_color}; padding-left:0.75rem; margin-bottom:0.5rem;">
                         <div style="font-weight:700; color:{COLORS["primary"]};">🅰 {label_a}</div>
-                        <div style="color:{"#22c55e" if ra.get("overall_passed") else "#ef4444"}; font-weight:600;">
+                        <div style="color:{PALETTE["success"] if ra.get("overall_passed") else PALETTE["danger"]}; font-weight:600;">
                             {"✅ Passed" if ra.get("overall_passed") else "❌ Failed"}
                         </div>
-                        <div style="font-size:0.8rem; color:#94a3b8;">Score: {ra.get("overall_score", "—")}</div>
+                        <div style="font-size:0.8rem; color:{PALETTE["text_soft"]};">Score: {ra.get("overall_score", "—")}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
                 st.text(ra.get("response", "")[:400])
             with d_col2:
-                outcome_color = "#22c55e" if rb.get("overall_passed") else "#ef4444"
+                outcome_color = PALETTE["success"] if rb.get("overall_passed") else PALETTE["danger"]
                 st.markdown(
                     f"""
                     <div style="border-left:3px solid {outcome_color}; padding-left:0.75rem; margin-bottom:0.5rem;">
                         <div style="font-weight:700; color:{COLORS["info"]};">🅱 {label_b}</div>
-                        <div style="color:{"#22c55e" if rb.get("overall_passed") else "#ef4444"}; font-weight:600;">
+                        <div style="color:{PALETTE["success"] if rb.get("overall_passed") else PALETTE["danger"]}; font-weight:600;">
                             {"✅ Passed" if rb.get("overall_passed") else "❌ Failed"}
                         </div>
-                        <div style="font-size:0.8rem; color:#94a3b8;">Score: {rb.get("overall_score", "—")}</div>
+                        <div style="font-size:0.8rem; color:{PALETTE["text_soft"]};">Score: {rb.get("overall_score", "—")}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,

@@ -1,36 +1,43 @@
-"""Reusable chart components built with Plotly."""
+"""Reusable chart components built with Plotly.
+
+Plotly takes colours as literal values and cannot read CSS, which is why the
+palette is a Python dict in ``theme`` rather than CSS custom properties.
+"""
 
 from __future__ import annotations
 
 import plotly.graph_objects as go
 
-# Consistent color palette
+from src.dashboard.components.theme import CATEGORY_COLORS, PALETTE, SEVERITY_COLORS
+
+__all__ = [
+    "CATEGORY_COLORS",
+    "COLORS",
+    "SEVERITY_COLORS",
+    "category_trend_chart",
+    "comparison_bar_chart",
+    "evaluator_scores_chart",
+    "latency_histogram",
+    "metrics_radar_chart",
+    "pass_rate_bar_chart",
+    "score_distribution_chart",
+    "severity_pie_chart",
+]
+
+#: Chart-facing names for palette entries. Kept as an alias because several
+#: pages already import ``COLORS`` from here to style their own HTML.
 COLORS = {
-    "primary": "#6366f1",
-    "success": "#4ade80",
-    "danger": "#f87171",
-    "warning": "#facc15",
-    "info": "#38bdf8",
-    "muted": "#6b7280",
+    "primary": PALETTE["accent"],
+    "success": PALETTE["success_bright"],
+    "danger": PALETTE["danger_soft"],
+    "warning": PALETTE["warning_bright"],
+    "info": PALETTE["info"],
+    "muted": PALETTE["text_faint"],
     "bg": "#1e1e2e",
-    "bg_card": "#2d2d44",
+    "bg_card": PALETTE["border"],
     "border": "#3d3d5c",
     "text": "#e0e0e0",
     "text_muted": "#a0a0b0",
-}
-
-CATEGORY_COLORS = {
-    "functional": "#6366f1",
-    "safety": "#f87171",
-    "regression": "#4ade80",
-    "multi_turn": "#38bdf8",
-}
-
-SEVERITY_COLORS = {
-    "critical": "#dc2626",
-    "high": "#f97316",
-    "medium": "#eab308",
-    "low": "#22c55e",
 }
 
 _LAYOUT_DEFAULTS = dict(
@@ -260,12 +267,12 @@ def evaluator_scores_chart(results: list[dict]) -> go.Figure:
     counts = [len(evaluator_scores[n]) for n in names]
 
     eval_colors = {
-        "rule_based": "#6366f1",
-        "safety": "#f87171",
-        "ragas": "#4ade80",
-        "deepeval": "#38bdf8",
-        "consistency": "#facc15",
-        "llm_judge": "#a78bfa",
+        "rule_based": PALETTE["accent"],
+        "safety": PALETTE["danger_soft"],
+        "ragas": PALETTE["success_bright"],
+        "deepeval": PALETTE["info"],
+        "consistency": PALETTE["warning_bright"],
+        "llm_judge": PALETTE["accent_soft"],
     }
     colors = [eval_colors.get(n, COLORS["muted"]) for n in names]
 

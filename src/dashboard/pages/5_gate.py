@@ -22,6 +22,7 @@ from src.dashboard.components.gate_view import BaselineSummary, blocking_reasons
 from src.dashboard.components.shared import BASELINES_DIR, list_runs
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import callout, inject_css, page_header
+from src.dashboard.components.theme import PALETTE
 from src.gate.baseline import BaselineError, build_baseline, load_baseline, save_baseline
 from src.gate.comparison import CompatibilityError
 from src.gate.models import GatePolicy, MetricPolicy
@@ -84,27 +85,27 @@ def _render_drift(baseline_file, summary: RunSummary) -> None:
 
 
 def _render_verdict_card(verdict, reasons: list[str]) -> None:
-    color = "#22c55e" if verdict.passed else "#ef4444"
+    color = PALETTE["success"] if verdict.passed else PALETTE["danger"]
     label = "✅ PASS" if verdict.passed else "❌ FAIL"
     reasons_html = (
         "".join(f'<li style="margin-bottom:0.25rem;">{r}</li>' for r in reasons)
         if reasons
-        else '<li style="color:#94a3b8;">Ninguna métrica gateada empeoró de forma significativa.</li>'
+        else f'<li style="color:{PALETTE["text_soft"]};">Ninguna métrica gateada empeoró de forma significativa.</li>'
     )
     st.markdown(
         f"""
-        <div style="background:linear-gradient(135deg,#1a1a2e,#22223d); border:1px solid #2d2d44;
+        <div style="background:linear-gradient(135deg,{PALETTE["bg"]},{PALETTE["bg_raised"]}); border:1px solid {PALETTE["border"]};
              border-left:4px solid {color}; border-radius:12px; padding:1.25rem; margin:1rem 0;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:2rem;">
                 <div style="flex:1;">
-                    <div style="font-size:0.7rem; color:#6366f1; text-transform:uppercase; letter-spacing:0.1em; font-weight:700;">
+                    <div style="font-size:0.7rem; color:{PALETTE["accent"]}; text-transform:uppercase; letter-spacing:0.1em; font-weight:700;">
                         Veredicto del gate
                     </div>
-                    <ul style="margin:0.5rem 0 0 1rem; padding:0; color:#e2e8f0; font-size:0.9rem;">{reasons_html}</ul>
+                    <ul style="margin:0.5rem 0 0 1rem; padding:0; color:{PALETTE["text"]}; font-size:0.9rem;">{reasons_html}</ul>
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:2.2rem; font-weight:900; color:{color};">{label}</div>
-                    <div style="font-size:0.8rem; color:#94a3b8;">
+                    <div style="font-size:0.8rem; color:{PALETTE["text_soft"]};">
                         {verdict.samples} muestra(s) · flakiness {verdict.mean_flakiness:.2f}
                     </div>
                 </div>
@@ -201,7 +202,7 @@ def render_gate(baselines: list[BaselineSummary], runs: list[dict]) -> None:
     """Selection, verdict and metric table. Returns early on any unusable input
     so the baseline-creation section below still renders."""
     st.markdown(
-        '<span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">1 · Qué comparar</span>',
+        f'<span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">1 · Qué comparar</span>',
         unsafe_allow_html=True,
     )
     sel_col1, sel_col2 = st.columns(2)
@@ -275,8 +276,8 @@ def render_gate(baselines: list[BaselineSummary], runs: list[dict]) -> None:
         )
 
     st.markdown(
-        """
-        <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">📐 Métricas</div>
+        f"""
+        <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.25rem;">📐 Métricas</div>
         <div class="metric-explain" style="margin-bottom:1rem;">
             Cada fila compara una métrica entre baseline y run con un bootstrap pareado por caso.
             <strong>Solo las métricas gateadas pueden romper la build</strong>; el resto es informativo.

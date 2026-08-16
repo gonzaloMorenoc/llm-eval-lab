@@ -23,6 +23,7 @@ render_sidebar()
 
 DATASETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "datasets"))
 
+from src.dashboard.components.theme import PALETTE
 from src.runner.runner import load_dataset
 
 # ── Load all datasets ─────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ st.divider()
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
 st.markdown(
-    '<span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">📊 Análisis del Dataset</span>',
+    f'<span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">📊 Análisis del Dataset</span>',
     unsafe_allow_html=True,
 )
 st.markdown("")
@@ -95,10 +96,10 @@ for c in all_cases:
 # KPI row
 kpi_cols = st.columns(4)
 kpi_data = [
-    ("Total Test Cases", str(total_cases), "#6366f1"),
-    ("Categorías", str(len(categories)), "#38bdf8"),
-    ("Topics únicos", str(len(topics)), "#22c55e"),
-    ("Con Reference", str(sum(1 for c in all_cases if c.reference)), "#f59e0b"),
+    ("Total Test Cases", str(total_cases), PALETTE["accent"]),
+    ("Categorías", str(len(categories)), PALETTE["info"]),
+    ("Topics únicos", str(len(topics)), PALETTE["success"]),
+    ("Con Reference", str(sum(1 for c in all_cases if c.reference)), PALETTE["warning"]),
 ]
 for col, (label, val, color) in zip(kpi_cols, kpi_data, strict=False):
     with col:
@@ -189,7 +190,12 @@ with chart_col3:
 
 # Category descriptions
 cat_icons = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
-cat_colors = {"functional": "#6366f1", "safety": "#ef4444", "regression": "#22c55e", "multi_turn": "#38bdf8"}
+cat_colors = {
+    "functional": PALETTE["accent"],
+    "safety": PALETTE["danger"],
+    "regression": PALETTE["success"],
+    "multi_turn": PALETTE["info"],
+}
 cat_descs_full = {
     "functional": "Evalúa si el modelo responde correctamente a preguntas generales, de dominio y de razonamiento lógico. Son los tests más básicos y cubren el comportamiento esperado del chatbot.",
     "safety": "Detecta vulnerabilidades de seguridad: prompt injection (intentos de hackear el system prompt), filtración de información confidencial y generación de contenido dañino.",
@@ -218,7 +224,7 @@ st.divider()
 
 # ── Browse & Filter ───────────────────────────────────────────────────────────
 st.markdown(
-    '<span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">🔍 Explorar Test Cases</span>',
+    f'<span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">🔍 Explorar Test Cases</span>',
     unsafe_allow_html=True,
 )
 
@@ -278,7 +284,7 @@ st.dataframe(table_data, use_container_width=True, hide_index=True, height=min(4
 if filtered:
     st.divider()
     st.markdown(
-        '<span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">📋 Vista Detallada</span>',
+        f'<span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">📋 Vista Detallada</span>',
         unsafe_allow_html=True,
     )
 
@@ -327,7 +333,10 @@ if filtered:
                             unsafe_allow_html=True,
                         )
                 else:
-                    st.markdown('<span style="font-size:0.8rem; color:#64748b;">Sin reference answer</span>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<span style="font-size:0.8rem; color:{PALETTE["text_muted"]};">Sin reference answer</span>',
+                        unsafe_allow_html=True,
+                    )
 
             with d_col2:
                 # Severity badge
@@ -339,7 +348,7 @@ if filtered:
 
                 # Evaluator badges
                 st.markdown(
-                    '<div style="font-size:0.82rem; font-weight:600; color:#94a3b8; margin-bottom:0.4rem;">Evaluadores</div>',
+                    f'<div style="font-size:0.82rem; font-weight:600; color:{PALETTE["text_soft"]}; margin-bottom:0.4rem;">Evaluadores</div>',
                     unsafe_allow_html=True,
                 )
                 badges_html = " ".join(
@@ -351,7 +360,7 @@ if filtered:
                 if c.ragas_metrics:
                     st.markdown("")
                     st.markdown(
-                        '<div style="font-size:0.82rem; font-weight:600; color:#94a3b8; margin-bottom:0.4rem;">RAGAS Metrics</div>',
+                        f'<div style="font-size:0.82rem; font-weight:600; color:{PALETTE["text_soft"]}; margin-bottom:0.4rem;">RAGAS Metrics</div>',
                         unsafe_allow_html=True,
                     )
                     ragas_html = " ".join(f'<span class="badge badge-info">{m.replace("_", " ").title()}</span>' for m in c.ragas_metrics)
@@ -360,12 +369,12 @@ if filtered:
                 if c.metadata:
                     st.markdown("")
                     st.markdown(
-                        '<div style="font-size:0.82rem; font-weight:600; color:#94a3b8; margin-bottom:0.4rem;">Metadata</div>',
+                        f'<div style="font-size:0.82rem; font-weight:600; color:{PALETTE["text_soft"]}; margin-bottom:0.4rem;">Metadata</div>',
                         unsafe_allow_html=True,
                     )
                     for k, v in c.metadata.items():
                         st.markdown(
-                            f'<div style="font-size:0.78rem; color:#64748b;"><code>{safe(k)}</code>: {safe(v)}</div>',
+                            f'<div style="font-size:0.78rem; color:{PALETTE["text_muted"]};"><code>{safe(k)}</code>: {safe(v)}</div>',
                             unsafe_allow_html=True,
                         )
 
@@ -373,8 +382,8 @@ st.divider()
 
 # ── Add New Test Case ─────────────────────────────────────────────────────────
 st.markdown(
-    """
-    <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">➕ Crear Nuevo Test Case</div>
+    f"""
+    <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.25rem;">➕ Crear Nuevo Test Case</div>
     <div class="metric-explain" style="margin-bottom:1rem;">
         💡 Tip: Comienza por definir el <strong>comportamiento esperado</strong> antes que el input.
         Un buen test case describe <em>qué debería hacer</em> el modelo, no <em>qué debería decir</em> exactamente.
@@ -440,7 +449,7 @@ with st.form("add_test_case", clear_on_submit=True):
         # Live preview
         if new_id and new_input:
             st.markdown(
-                '<div style="font-size:0.82rem; font-weight:600; color:#94a3b8; margin-bottom:0.4rem;">Preview JSON</div>',
+                f'<div style="font-size:0.82rem; font-weight:600; color:{PALETTE["text_soft"]}; margin-bottom:0.4rem;">Preview JSON</div>',
                 unsafe_allow_html=True,
             )
             st.json(

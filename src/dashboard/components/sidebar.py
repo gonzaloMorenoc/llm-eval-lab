@@ -9,6 +9,8 @@ import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
+from src.dashboard.components.theme import PALETTE
+
 
 def render_sidebar() -> dict:
     """Render the sidebar and return the current configuration state."""
@@ -20,10 +22,10 @@ def render_sidebar() -> dict:
     with st.sidebar:
         # ── Logo & Title ──────────────────────────────────────────────────────
         st.markdown(
-            """
+            f"""
             <div style="text-align:center; padding:0.75rem 0 0.5rem;">
                 <div style="font-size:2.2rem; filter:drop-shadow(0 0 12px rgba(99,102,241,0.5));">🔬</div>
-                <div style="font-size:1.15rem; font-weight:800; color:#e2e8f0; margin-top:0.1rem;">LLM Eval Lab</div>
+                <div style="font-size:1.15rem; font-weight:800; color:{PALETTE["text"]}; margin-top:0.1rem;">LLM Eval Lab</div>
                 <div style="font-size:0.72rem; color:#4b5563; margin-top:0.1rem; letter-spacing:0.05em;">QA Framework para IA · v0.3.0</div>
             </div>
             """,
@@ -34,8 +36,8 @@ def render_sidebar() -> dict:
 
         # ── Provider ──────────────────────────────────────────────────────────
         st.markdown(
-            """
-            <div style="font-size:0.68rem; color:#6366f1; text-transform:uppercase;
+            f"""
+            <div style="font-size:0.68rem; color:{PALETTE["accent"]}; text-transform:uppercase;
                  letter-spacing:0.1em; font-weight:700; margin-bottom:0.4rem;">
                 🔌 Provider (¿Qué LLM evaluar?)
             </div>
@@ -58,13 +60,13 @@ def render_sidebar() -> dict:
         # Provider info card
         if provider == "mock":
             st.markdown(
-                """
-                <div style="background:#13132b; border-radius:8px; padding:0.65rem 0.75rem;
-                     border:1px solid #2d2d44; font-size:0.78rem; margin-top:0.25rem;">
-                    <div style="color:#22c55e; font-weight:700; margin-bottom:0.2rem;">
+                f"""
+                <div style="background:{PALETTE["bg_sunken"]}; border-radius:8px; padding:0.65rem 0.75rem;
+                     border:1px solid {PALETTE["border"]}; font-size:0.78rem; margin-top:0.25rem;">
+                    <div style="color:{PALETTE["success"]}; font-weight:700; margin-bottom:0.2rem;">
                         🧪 Mock Mode — Sin API key
                     </div>
-                    <div style="color:#64748b; line-height:1.45;">
+                    <div style="color:{PALETTE["text_muted"]}; line-height:1.45;">
                         Usa keyword matching para tests deterministas.
                         <strong>Perfecto para aprender</strong> cómo funciona el sistema.
                     </div>
@@ -79,24 +81,26 @@ def render_sidebar() -> dict:
             api_key_env = p_cfg.get("api_key_env", "")
             has_key = bool(os.getenv(api_key_env, ""))
 
-            key_color = "#22c55e" if has_key else "#ef4444"
+            key_color = PALETTE["success"] if has_key else PALETTE["danger"]
             key_status = "🟢 Configurada" if has_key else "🔴 Faltante"
-            key_hint = "" if has_key else f"<br><span style='color:#ef4444;'>Configura <code>{api_key_env}</code> en tu .env</span>"
+            key_hint = (
+                "" if has_key else f"<br><span style='color:{PALETTE['danger']};'>Configura <code>{api_key_env}</code> en tu .env</span>"
+            )
 
             st.markdown(
                 f"""
-                <div style="background:#13132b; border-radius:8px; padding:0.65rem 0.75rem;
-                     border:1px solid #2d2d44; font-size:0.78rem; margin-top:0.25rem;">
+                <div style="background:{PALETTE["bg_sunken"]}; border-radius:8px; padding:0.65rem 0.75rem;
+                     border:1px solid {PALETTE["border"]}; font-size:0.78rem; margin-top:0.25rem;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:0.3rem;">
-                        <span style="color:#94a3b8;">Modelo</span>
-                        <code style="color:#a5b4fc;">{model}</code>
+                        <span style="color:{PALETTE["text_soft"]};">Modelo</span>
+                        <code style="color:{PALETTE["accent_pale"]};">{model}</code>
                     </div>
                     <div style="display:flex; justify-content:space-between; margin-bottom:0.3rem;">
-                        <span style="color:#94a3b8;">Free tier</span>
-                        <span style="color:#e2e8f0;">{limits}</span>
+                        <span style="color:{PALETTE["text_soft"]};">Free tier</span>
+                        <span style="color:{PALETTE["text"]};">{limits}</span>
                     </div>
                     <div style="display:flex; justify-content:space-between;">
-                        <span style="color:#94a3b8;">API Key</span>
+                        <span style="color:{PALETTE["text_soft"]};">API Key</span>
                         <span style="color:{key_color}; font-weight:600;">{key_status}</span>
                     </div>
                     {key_hint}
@@ -109,8 +113,8 @@ def render_sidebar() -> dict:
 
         # ── Mode ──────────────────────────────────────────────────────────────
         st.markdown(
-            """
-            <div style="font-size:0.68rem; color:#6366f1; text-transform:uppercase;
+            f"""
+            <div style="font-size:0.68rem; color:{PALETTE["accent"]}; text-transform:uppercase;
                  letter-spacing:0.1em; font-weight:700; margin-bottom:0.4rem;">
                 🔀 Modo de Evaluación
             </div>
@@ -133,8 +137,8 @@ def render_sidebar() -> dict:
         }
         st.markdown(
             f"""
-            <div style="font-size:0.75rem; color:#64748b; background:#13132b; border-radius:6px;
-                 padding:0.5rem 0.65rem; border:1px solid #2d2d44; margin-top:0.25rem;">
+            <div style="font-size:0.75rem; color:{PALETTE["text_muted"]}; background:{PALETTE["bg_sunken"]}; border-radius:6px;
+                 padding:0.5rem 0.65rem; border:1px solid {PALETTE["border"]}; margin-top:0.25rem;">
                 {mode_desc[mode]}
             </div>
             """,
@@ -145,8 +149,8 @@ def render_sidebar() -> dict:
 
         # ── Evaluators ────────────────────────────────────────────────────────
         st.markdown(
-            """
-            <div style="font-size:0.68rem; color:#6366f1; text-transform:uppercase;
+            f"""
+            <div style="font-size:0.68rem; color:{PALETTE["accent"]}; text-transform:uppercase;
                  letter-spacing:0.1em; font-weight:700; margin-bottom:0.4rem;">
                 🧪 Evaluadores
             </div>
@@ -179,10 +183,10 @@ def render_sidebar() -> dict:
         needs_openai = any(e in active_evals for e in ("ragas", "deepeval", "llm_judge"))
         if needs_openai and not os.getenv("OPENAI_API_KEY"):
             st.markdown(
-                """
-                <div style="background:rgba(239,68,68,0.08); border-left:3px solid #ef4444;
+                f"""
+                <div style="background:rgba(239,68,68,0.08); border-left:3px solid {PALETTE["danger"]};
                      border-radius:0 6px 6px 0; padding:0.5rem 0.65rem; font-size:0.76rem;
-                     color:#fca5a5; margin-top:0.25rem;">
+                     color:{PALETTE["danger_pale"]}; margin-top:0.25rem;">
                     ⚠️ RAGAS / DeepEval / LLM Judge requieren <code>OPENAI_API_KEY</code>
                 </div>
                 """,
@@ -191,10 +195,10 @@ def render_sidebar() -> dict:
 
         if not active_evals:
             st.markdown(
-                """
-                <div style="background:rgba(245,158,11,0.08); border-left:3px solid #f59e0b;
+                f"""
+                <div style="background:rgba(245,158,11,0.08); border-left:3px solid {PALETTE["warning"]};
                      border-radius:0 6px 6px 0; padding:0.5rem 0.65rem; font-size:0.76rem;
-                     color:#fde68a; margin-top:0.25rem;">
+                     color:{PALETTE["warning_pale"]}; margin-top:0.25rem;">
                     ⚠️ Activa al menos un evaluador
                 </div>
                 """,
@@ -205,8 +209,8 @@ def render_sidebar() -> dict:
 
         # ── Runner Settings ────────────────────────────────────────────────────
         st.markdown(
-            """
-            <div style="font-size:0.68rem; color:#6366f1; text-transform:uppercase;
+            f"""
+            <div style="font-size:0.68rem; color:{PALETTE["accent"]}; text-transform:uppercase;
                  letter-spacing:0.1em; font-weight:700; margin-bottom:0.4rem;">
                 ⚙️ Configuración del Runner
             </div>
@@ -250,7 +254,7 @@ def render_sidebar() -> dict:
         samples_note = f" · {samples} muestras" if samples > 1 else ""
         st.markdown(
             f"""
-            <div style="font-size:0.75rem; color:#64748b; margin-top:0.25rem;">
+            <div style="font-size:0.75rem; color:{PALETTE["text_muted"]}; margin-top:0.25rem;">
                 {max_concurrent} tests paralelos · {timeout // 1000}s timeout{samples_note}
             </div>
             """,
@@ -282,9 +286,9 @@ def render_sidebar() -> dict:
 
         # ── Footer ─────────────────────────────────────────────────────────────
         st.markdown(
-            """
-            <div style="text-align:center; color:#374151; font-size:0.7rem; padding:0.5rem 0 0.25rem;">
-                v0.3.0 · <a href="https://github.com/gonzaloMorenoc/llm-eval-lab" style="color:#6366f1; text-decoration:none;">GitHub ↗</a>
+            f"""
+            <div style="text-align:center; color:{PALETTE["text_ghost"]}; font-size:0.7rem; padding:0.5rem 0 0.25rem;">
+                v0.3.0 · <a href="https://github.com/gonzaloMorenoc/llm-eval-lab" style="color:{PALETTE["accent"]}; text-decoration:none;">GitHub ↗</a>
             </div>
             """,
             unsafe_allow_html=True,

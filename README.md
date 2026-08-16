@@ -74,6 +74,7 @@ graph TD
 
 ```
 llm-eval-lab/
+├── .streamlit/config.toml       # Streamlit chrome theme, mirroring the palette
 ├── action.yml                   # Composite GitHub Action: run the CLI and gate on regressions
 ├── config/
 │   ├── config.yaml              # Providers, runner, RAGAS, DeepEval, consistency config
@@ -128,6 +129,7 @@ llm-eval-lab/
 │       │   ├── styles.py        # CSS injection and layout primitives
 │       │   ├── charts.py        # Plotly chart components
 │       │   ├── stability.py     # Which cases disagree with themselves across samples
+│       │   ├── theme.py         # Single source of truth for colour (PALETTE)
 │       │   ├── gate_view.py     # Quality Gate logic (baselines, dataset drift, verdict rows)
 │       │   ├── export.py        # CSV builders behind the download buttons
 │       │   └── metrics.py       # KPI cards and badges
@@ -146,6 +148,7 @@ llm-eval-lab/
 │   ├── test_cli.py              # CLI tests (typer's CliRunner, mock provider)
 │   ├── test_config.py           # Config loader tests (LRU cache correctness)
 │   ├── test_dashboard_charts.py # Trend chart ordering and labelling tests
+│   ├── test_dashboard_theme.py  # Guard against hardcoded colour literals
 │   ├── test_dashboard_export.py # CSV export tests (escaping, missing fields)
 │   ├── test_dashboard_gate_view.py # Quality Gate page logic tests (baselines, drift, verdict)
 │   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs(), report cache)
@@ -191,7 +194,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 439 tests using mock chatbots with coverage report (gate: ≥80%).
+Runs 441 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -536,7 +539,7 @@ Reports are generated in `results/{run_id}/`:
 ### Run tests
 
 ```bash
-pytest                          # 439 tests with coverage report
+pytest                          # 441 tests with coverage report
 pytest -x                       # Stop on first failure
 pytest tests/test_evaluators.py # Run specific test file
 pytest -k "safety"              # Run tests matching keyword
