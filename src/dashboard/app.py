@@ -12,7 +12,7 @@ import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from src.dashboard.components.charts import pass_rate_bar_chart
+from src.dashboard.components.charts import category_trend_chart, pass_rate_bar_chart
 from src.dashboard.components.shared import (
     CATEGORY_DESCRIPTIONS,
     CATEGORY_ICONS,
@@ -349,6 +349,19 @@ def main() -> None:
                 st.plotly_chart(fig, use_container_width=True, key="home_bar")
 
         if len(runs) > 1:
+            st.markdown("**Evolución entre runs**")
+            st.plotly_chart(category_trend_chart(runs[:20]), use_container_width=True, key="home_trend")
+            st.markdown(
+                """
+                <div class="metric-explain" style="margin-bottom:1rem;">
+                    💡 <strong>Evolución del Pass Rate</strong> — Cada punto es un run, del más antiguo al más reciente.
+                    La línea punteada es el total; las de colores, cada categoría.
+                    Una caída sostenida en una categoría concreta señala dónde se está degradando el modelo.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
             st.markdown("**Historial de runs**")
             table = []
             for r in runs[:10]:

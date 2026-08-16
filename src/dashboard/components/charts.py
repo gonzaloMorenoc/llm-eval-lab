@@ -318,31 +318,56 @@ def score_distribution_chart(results: list[dict]) -> go.Figure:
     return fig
 
 
+def _run_label(run: dict) -> str:
+    """Short, human-readable x-axis label: ``MM-DD HH:MM``.
+
+    Falls back to a truncated run id when a run has no usable timestamp — an id
+    on the axis is ugly, but a missing tick is worse.
+    """
+    timestamp = run.get("timestamp", "")
+    if len(timestamp) >= 16 and timestamp[10] == "T":
+        return f"{timestamp[5:10]} {timestamp[11:16]}"
+    return str(run.get("run_id", "?"))[:8]
+
+
 def category_trend_chart(runs: list[dict]) -> go.Figure:
-    """Line chart showing pass rate trend across runs per category."""
+    """Pass rate over time, per category plus an overall line.
+
+    Sorts chronologically itself rather than trusting the caller: ``list_runs()``
+    returns newest first, so a caller passing it straight through would draw time
+    backwards, and the chart would read as improvement where there was decline.
+    """
     if not runs:
         fig = go.Figure()
         fig.update_layout(**_LAYOUT_DEFAULTS, title="Pass Rate Trend")
         return fig
 
-    # Collect data per category across runs
-    all_cats = set()
-    for r in runs:
+    ordered = sorted(runs, key=lambda r: r.get("timestamp", ""))
+    labels = [_run_label(r) for r in ordered]
+
+    all_cats: set[str] = set()
+    for r in ordered:
         all_cats.update(r.get("by_category", {}).keys())
 
     fig = go.Figure()
-    run_labels = [r.get("run_id", "?")[:8] for r in runs]
+
+    fig.add_trace(
+        go.Scatter(
+            x=labels,
+            y=[r.get("pass_rate", 0) * 100 for r in ordered],
+            mode="lines+markers",
+            name="Global",
+            line=dict(color=COLORS["text"], width=3, dash="dot"),
+            marker=dict(size=9),
+            hovertemplate="%{x}: %{y:.1f}%<extra>Global</extra>",
+        )
+    )
 
     for cat in sorted(all_cats):
-        rates = []
-        for r in runs:
-            cat_stats = r.get("by_category", {}).get(cat, {})
-            rates.append(cat_stats.get("pass_rate", 0) * 100)
-
         fig.add_trace(
             go.Scatter(
-                x=run_labels,
-                y=rates,
+                x=labels,
+                y=[r.get("by_category", {}).get(cat, {}).get("pass_rate", 0) * 100 for r in ordered],
                 mode="lines+markers",
                 name=cat.replace("_", " ").title(),
                 line=dict(color=CATEGORY_COLORS.get(cat, COLORS["muted"]), width=2),
@@ -351,12 +376,12 @@ def category_trend_chart(runs: list[dict]) -> go.Figure:
             )
         )
 
+    layout = {**_LAYOUT_DEFAULTS, "height": 380}
     fig.update_layout(
-        **_LAYOUT_DEFAULTS,
-        title=dict(text="Pass Rate Trend Across Runs", font=dict(size=14)),
-        xaxis=dict(title="Run ID", gridcolor=COLORS["border"]),
+        **layout,
+        title=dict(text="Evolución del Pass Rate", font=dict(size=14)),
+        xaxis=dict(title="Run", gridcolor=COLORS["border"]),
         yaxis=dict(title="Pass Rate (%)", range=[0, 105], gridcolor=COLORS["border"]),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
-        height=380,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
     )
     return fig

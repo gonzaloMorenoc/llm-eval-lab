@@ -11,6 +11,7 @@ import streamlit as st
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.dashboard.components.charts import COLORS, comparison_bar_chart
+from src.dashboard.components.export import comparison_to_csv
 from src.dashboard.components.metrics import severity_icon
 from src.dashboard.components.shared import RESULTS_DIR, list_runs
 from src.dashboard.components.sidebar import render_sidebar
@@ -436,24 +437,30 @@ try:
         build_baseline([_full_summary(run_b)]),
         GatePolicy(),
     )
-    st.dataframe(
-        [
-            {
-                "Métrica": c.metric,
-                "A (baseline)": round(c.baseline_mean, 4),
-                "B (actual)": round(c.current_mean, 4),
-                "Regresión": round(c.regression, 4),
-                "IC 95%": f"[{c.ci_low:+.4f}, {c.ci_high:+.4f}]",
-                "p-valor": round(c.p_value, 4),
-                "Significativa": "sí" if c.significant else "no",
-            }
-            for c in _verdict.comparisons
-        ],
-        use_container_width=True,
-    )
+    _stats_rows = [
+        {
+            "Métrica": c.metric,
+            "A (baseline)": round(c.baseline_mean, 4),
+            "B (actual)": round(c.current_mean, 4),
+            "Regresión": round(c.regression, 4),
+            "IC 95%": f"[{c.ci_low:+.4f}, {c.ci_high:+.4f}]",
+            "p-valor": round(c.p_value, 4),
+            "Significativa": "sí" if c.significant else "no",
+        }
+        for c in _verdict.comparisons
+    ]
+    st.dataframe(_stats_rows, use_container_width=True)
     st.caption(
         "Bootstrap pareado por caso: B como run actual frente a A como baseline. "
         "Con 1 muestra por caso la potencia estadística es baja; usa `--samples 3` o más en la CLI."
+    )
+    st.download_button(
+        "⬇️ Descargar comparación (CSV)",
+        data=comparison_to_csv(_stats_rows),
+        file_name=f"compare_{run_a.get('run_id', 'a')}_vs_{run_b.get('run_id', 'b')}.csv",
+        mime="text/csv",
+        disabled=not _stats_rows,
+        help="La tabla estadística de arriba, con intervalos de confianza y p-valores.",
     )
 except Exception as e:
     st.info(f"Comparación estadística no disponible para estos runs: {e}")
