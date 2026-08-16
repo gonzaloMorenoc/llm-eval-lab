@@ -457,3 +457,9 @@ try:
     )
 except Exception as e:
     st.info(f"Comparación estadística no disponible para estos runs: {e}")
+
+st.caption(
+    "Esta página enfrenta dos runs entre sí y no emite veredicto. "
+    "Para juzgar un run contra un baseline commiteado — lo mismo que hace el CI — usa el Quality Gate."
+)
+st.page_link("pages/5_gate.py", label="🎯 Ir al Quality Gate →", use_container_width=False)

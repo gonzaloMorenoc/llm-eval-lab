@@ -128,12 +128,14 @@ llm-eval-lab/
 │       │   ├── styles.py        # CSS injection and layout primitives
 │       │   ├── charts.py        # Plotly chart components
 │       │   ├── stability.py     # Which cases disagree with themselves across samples
+│       │   ├── gate_view.py     # Quality Gate logic (baselines, dataset drift, verdict rows)
 │       │   └── metrics.py       # KPI cards and badges
 │       └── pages/
 │           ├── 1_run.py         # Run Evaluation page
 │           ├── 2_results.py     # Results Dashboard page
 │           ├── 3_compare.py     # Compare Runs page (includes the gate's statistical comparison)
-│           └── 4_test_cases.py  # Test Cases Manager page
+│           ├── 4_test_cases.py  # Test Cases Manager page
+│           └── 5_gate.py        # Quality Gate page (verdict, policy, baseline creation)
 ├── tests/
 │   ├── conftest.py              # Shared fixtures
 │   ├── fixtures/
@@ -142,6 +144,7 @@ llm-eval-lab/
 │   ├── test_chatbots.py         # Chatbot adapter tests
 │   ├── test_cli.py              # CLI tests (typer's CliRunner, mock provider)
 │   ├── test_config.py           # Config loader tests (LRU cache correctness)
+│   ├── test_dashboard_gate_view.py # Quality Gate page logic tests (baselines, drift, verdict)
 │   ├── test_dashboard_shared.py # Dashboard shared-utility tests (safe() escaper, list_runs(), report cache)
 │   ├── test_dashboard_stability.py # Multi-sample stability view tests
 │   ├── test_deepeval_evaluator.py # DeepEval evaluator logic tests
@@ -185,7 +188,7 @@ pip install -e ".[dashboard,dev]"
 pytest
 ```
 
-Runs 405 tests using mock chatbots with coverage report (gate: ≥80%).
+Runs 424 tests using mock chatbots with coverage report (gate: ≥80%).
 
 ### 2. Launch the dashboard
 
@@ -200,6 +203,8 @@ The dashboard lets you:
   passing in some samples and failing in others
 - Explore results with interactive charts and filters
 - Compare runs side-by-side
+- Judge a run against a committed baseline with the same gate CI uses, see why it
+  passes or fails, and simulate other policy thresholds without touching `gate.yaml`
 - Manage test case datasets
 
 ### 3. CLI — Plain LLM evaluation
@@ -526,7 +531,7 @@ Reports are generated in `results/{run_id}/`:
 ### Run tests
 
 ```bash
-pytest                          # 405 tests with coverage report
+pytest                          # 424 tests with coverage report
 pytest -x                       # Stop on first failure
 pytest tests/test_evaluators.py # Run specific test file
 pytest -k "safety"              # Run tests matching keyword
