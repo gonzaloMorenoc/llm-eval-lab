@@ -40,6 +40,7 @@ st.markdown(
 )
 
 # ── Imports ───────────────────────────────────────────────────────────────────
+from src.dashboard.components.theme import PALETTE
 from src.runner.runner import load_dataset
 
 datasets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "datasets"))
@@ -52,14 +53,14 @@ for fname in sorted(os.listdir(datasets_dir)):
 
 # ── Step 1 · Dataset Selection ────────────────────────────────────────────────
 st.markdown(
-    """
+    f"""
     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.25rem;">
-        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6);
+        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,{PALETTE["accent"]},{PALETTE["accent_bright"]});
             display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; color:white;
             box-shadow:0 0 12px rgba(99,102,241,0.4); flex-shrink:0;">1</div>
-        <span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">Selecciona los Datasets</span>
+        <span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">Selecciona los Datasets</span>
     </div>
-    <div style="font-size:0.82rem; color:#64748b; margin-bottom:1rem; margin-left:2.25rem;">
+    <div style="font-size:0.82rem; color:{PALETTE["text_muted"]}; margin-bottom:1rem; margin-left:2.25rem;">
         Cada categoría evalúa un aspecto diferente de la calidad del LLM
     </div>
     """,
@@ -98,7 +99,7 @@ for i, (name, cases) in enumerate(available_datasets.items()):
         if checked:
             selected_datasets.append(name)
 
-        border_color = color if checked else "#2d2d44"
+        border_color = color if checked else PALETTE["border"]
         st.markdown(
             f"""
             <div class="dataset-card {"dataset-card-selected" if checked else ""}"
@@ -107,8 +108,8 @@ for i, (name, cases) in enumerate(available_datasets.items()):
                 <div style="font-size:0.78rem; font-weight:700; color:{color}; text-align:center; margin-bottom:0.3rem;">
                     {len(cases)} tests
                 </div>
-                <div style="font-size:0.73rem; color:#94a3b8; line-height:1.4; margin-bottom:0.5rem;">{desc}</div>
-                <div style="font-size:0.7rem; color:#64748b;">{sev_str}</div>
+                <div style="font-size:0.73rem; color:{PALETTE["text_soft"]}; line-height:1.4; margin-bottom:0.5rem;">{desc}</div>
+                <div style="font-size:0.7rem; color:{PALETTE["text_muted"]};">{sev_str}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -136,14 +137,14 @@ st.divider()
 
 # ── Step 2 · Configuration ────────────────────────────────────────────────────
 st.markdown(
-    """
+    f"""
     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.25rem;">
-        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#38bdf8,#0ea5e9);
+        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,{PALETTE["info"]},{PALETTE["info_deep"]});
             display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; color:white;
             box-shadow:0 0 12px rgba(56,189,248,0.4); flex-shrink:0;">2</div>
-        <span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">Configuración Actual</span>
+        <span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">Configuración Actual</span>
     </div>
-    <div style="font-size:0.82rem; color:#64748b; margin-bottom:1rem; margin-left:2.25rem;">
+    <div style="font-size:0.82rem; color:{PALETTE["text_muted"]}; margin-bottom:1rem; margin-left:2.25rem;">
         Ajusta el provider, modo y evaluadores en la barra lateral izquierda
     </div>
     """,
@@ -167,13 +168,13 @@ eval_descriptions = {
 
 cfg_cols = st.columns([1, 1, 2, 1])
 with cfg_cols[0]:
-    provider_color = "#22c55e" if provider == "mock" else "#6366f1"
+    provider_color = PALETTE["success"] if provider == "mock" else PALETTE["accent"]
     st.markdown(
         f"""
         <div class="stat-card" style="border-left:3px solid {provider_color};">
             <div class="stat-label">🔌 Provider</div>
             <div style="font-size:1.2rem; font-weight:700; color:{provider_color}; margin-top:0.3rem;">{provider}</div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:0.2rem;">
+            <div style="font-size:0.72rem; color:{PALETTE["text_muted"]}; margin-top:0.2rem;">
                 {"Sin API key · Ideal para pruebas" if provider == "mock" else "LLM real · Necesita API key"}
             </div>
         </div>
@@ -181,13 +182,13 @@ with cfg_cols[0]:
         unsafe_allow_html=True,
     )
 with cfg_cols[1]:
-    mode_color = "#38bdf8" if mode == "plain" else "#f59e0b"
+    mode_color = PALETTE["info"] if mode == "plain" else PALETTE["warning"]
     st.markdown(
         f"""
         <div class="stat-card" style="border-left:3px solid {mode_color};">
             <div class="stat-label">🔀 Modo</div>
             <div style="font-size:1.2rem; font-weight:700; color:{mode_color}; margin-top:0.3rem;">{mode.title()}</div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:0.2rem;">
+            <div style="font-size:0.72rem; color:{PALETTE["text_muted"]}; margin-top:0.2rem;">
                 {"LLM directo sin contexto externo" if mode == "plain" else "Retrieval Augmented Generation con ChromaDB"}
             </div>
         </div>
@@ -201,7 +202,7 @@ with cfg_cols[2]:
     )
     st.markdown(
         f"""
-        <div class="stat-card" style="border-left:3px solid #a78bfa;">
+        <div class="stat-card" style="border-left:3px solid {PALETTE["accent_soft"]};">
             <div class="stat-label">🧪 Evaluadores activos ({len(active_evals)})</div>
             <div style="margin-top:0.5rem; display:flex; flex-wrap:wrap; gap:0.3rem;">{evals_html}</div>
         </div>
@@ -212,11 +213,11 @@ with cfg_cols[3]:
     samples_line = f"{samples} muestras · mide estabilidad" if samples > 1 else "1 muestra · sin medida de estabilidad"
     st.markdown(
         f"""
-        <div class="stat-card" style="border-left:3px solid #64748b;">
+        <div class="stat-card" style="border-left:3px solid {PALETTE["text_muted"]};">
             <div class="stat-label">⚙️ Concurrencia</div>
-            <div style="font-size:1.5rem; font-weight:700; color:#e2e8f0; margin-top:0.3rem;">{max_concurrent}</div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:0.2rem;">tests paralelos</div>
-            <div style="font-size:0.72rem; color:#64748b; margin-top:0.2rem;">{samples_line}</div>
+            <div style="font-size:1.5rem; font-weight:700; color:{PALETTE["text"]}; margin-top:0.3rem;">{max_concurrent}</div>
+            <div style="font-size:0.72rem; color:{PALETTE["text_muted"]}; margin-top:0.2rem;">tests paralelos</div>
+            <div style="font-size:0.72rem; color:{PALETTE["text_muted"]}; margin-top:0.2rem;">{samples_line}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -228,7 +229,7 @@ with st.expander("💡 ¿Qué hace cada evaluador?"):
     for i, (ev_key, (icon, name, desc)) in enumerate(eval_descriptions.items()):
         is_active = ev_key in active_evals
         with ev_cols[i % 3]:
-            border = "border-color:#6366f1;" if is_active else ""
+            border = f"border-color:{PALETTE['accent']};" if is_active else ""
             status_badge = badge("Activo", "purple") if is_active else badge("Inactivo", "gray")
             st.markdown(
                 f"""
@@ -248,12 +249,12 @@ st.divider()
 
 # ── Step 3 · Execute ──────────────────────────────────────────────────────────
 st.markdown(
-    """
+    f"""
     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.25rem;">
-        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#22c55e,#16a34a);
+        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,{PALETTE["success"]},{PALETTE["success_deep"]});
             display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; color:white;
             box-shadow:0 0 12px rgba(34,197,94,0.4); flex-shrink:0;">3</div>
-        <span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">Ejecutar Evaluación</span>
+        <span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">Ejecutar Evaluación</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -397,17 +398,17 @@ if run_clicked:
 
     st.markdown(
         f"""
-        <div style="background:linear-gradient(135deg,#1a1a2e,#22223d); border:1px solid #2d2d44;
+        <div style="background:linear-gradient(135deg,{PALETTE["bg"]},{PALETTE["bg_raised"]}); border:1px solid {PALETTE["border"]};
              border-left:4px solid {pr_color}; border-radius:12px; padding:1.25rem; margin:1rem 0;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <div style="font-size:0.7rem; color:#6366f1; text-transform:uppercase; letter-spacing:0.1em; font-weight:700;">Run completado</div>
-                    <div style="font-size:1rem; font-weight:700; color:#e2e8f0; margin-top:0.2rem;">{summary.run_id}</div>
-                    <div style="font-size:0.8rem; color:#64748b;">{summary.total} tests{samples_note} · {elapsed:.1f}s · {provider}/{mode}</div>
+                    <div style="font-size:0.7rem; color:{PALETTE["accent"]}; text-transform:uppercase; letter-spacing:0.1em; font-weight:700;">Run completado</div>
+                    <div style="font-size:1rem; font-weight:700; color:{PALETTE["text"]}; margin-top:0.2rem;">{summary.run_id}</div>
+                    <div style="font-size:0.8rem; color:{PALETTE["text_muted"]};">{summary.total} tests{samples_note} · {elapsed:.1f}s · {provider}/{mode}</div>
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:2.5rem; font-weight:900; color:{pr_color};">{pr:.0%}</div>
-                    <div style="font-size:0.8rem; color:#94a3b8;">Pass Rate · {pr_msg}</div>
+                    <div style="font-size:0.8rem; color:{PALETTE["text_soft"]};">Pass Rate · {pr_msg}</div>
                 </div>
             </div>
         </div>
@@ -454,8 +455,8 @@ if run_clicked:
     if len(summaries) > 1:
         st.divider()
         st.markdown(
-            """
-            <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.25rem;">🎲 Estabilidad entre muestras</div>
+            f"""
+            <div style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.25rem;">🎲 Estabilidad entre muestras</div>
             <div class="metric-explain" style="margin-bottom:1rem;">
                 Un caso <strong>inestable</strong> pasa en unas ejecuciones y falla en otras con la misma pregunta.
                 No es un fallo del modelo en sí, sino una respuesta que cambia entre llamadas — y es justo lo que

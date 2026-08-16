@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`src/dashboard/components/theme.py` — one source of truth for colour.** The
+  dashboard carried 328 hardcoded hex literals across 11 files, 301 of them
+  repetitions of ~15 colours, so changing a system colour meant a global search
+  and hoping nothing was missed. Colours used more than once now live in
+  `PALETTE`; the CSS block consumes it through `string.Template` and Python code
+  imports it directly (Plotly cannot read CSS, so a CSS-variable approach would
+  have enabled nothing). Deliberately no visual change: verified by comparing
+  every applied style, SVG paint attribute and injected CSS rule across all six
+  pages before and after — identical character for character.
+- **`.streamlit/config.toml` declaring the dark theme.** Without it Streamlit's
+  own chrome — top bar, menus, sidebar — used its default theme while the
+  injected CSS painted the body dark, and the seam was plainly visible.
+- **A guard test for colour** (`tests/test_dashboard_theme.py`): fails if any hex
+  literal appears more than once outside `theme.py`, or if a literal matches a
+  palette entry that already has a name. Without it the literals creep back one
+  "just this once" at a time.
 - **Pass rate trend on the home page.** Every run is a point, oldest to newest,
   with one line per category plus an overall line — the same data the run history
   table already showed, in the shape that answers "are we getting better or

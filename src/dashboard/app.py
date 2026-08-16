@@ -24,6 +24,7 @@ from src.dashboard.components.shared import (
 )
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import how_step, inject_css, stat_card
+from src.dashboard.components.theme import PALETTE
 
 
 def main() -> None:
@@ -38,17 +39,17 @@ def main() -> None:
 
     # ── Hero ──────────────────────────────────────────────────────────────────
     st.markdown(
-        """
+        f"""
         <div style="text-align:center; padding:2rem 0 1.25rem;">
             <div style="font-size:3.5rem; margin-bottom:0.5rem; filter:drop-shadow(0 0 20px rgba(99,102,241,0.4));">🔬</div>
             <h1 style="font-size:2.8rem; font-weight:900; margin:0;
-                background:linear-gradient(135deg,#6366f1,#a78bfa,#38bdf8);
+                background:linear-gradient(135deg,{PALETTE["accent"]},{PALETTE["accent_soft"]},{PALETTE["info"]});
                 -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">
                 LLM Eval Lab
             </h1>
-            <p style="color:#94a3b8; font-size:1.1rem; margin-top:0.5rem; font-weight:400;">
+            <p style="color:{PALETTE["text_soft"]}; font-size:1.1rem; margin-top:0.5rem; font-weight:400;">
                 Framework de evaluación de calidad para chatbots de IA<br>
-                <span style="font-size:0.9rem; color:#64748b;">Aprende QA de IA de forma práctica e interactiva · RAGAS · DeepEval · LLM Judge</span>
+                <span style="font-size:0.9rem; color:{PALETTE["text_muted"]};">Aprende QA de IA de forma práctica e interactiva · RAGAS · DeepEval · LLM Judge</span>
             </p>
         </div>
         """,
@@ -63,13 +64,13 @@ def main() -> None:
         pr_color = pass_rate_color(pr)
         s_cols = st.columns(4)
         stats = [
-            ("Runs completados", str(len(runs)), "#6366f1", ""),
+            ("Runs completados", str(len(runs)), PALETTE["accent"], ""),
             ("Último Pass Rate", f"{pr:.0%}", pr_color, "≥70% = bueno"),
-            ("Avg Score", f"{latest.get('avg_score', 0):.3f}", "#38bdf8", "0.0 – 1.0"),
+            ("Avg Score", f"{latest.get('avg_score', 0):.3f}", PALETTE["info"], "0.0 – 1.0"),
             (
                 "Critical Failures",
                 str(latest.get("critical_failures", 0)),
-                "#ef4444" if latest.get("critical_failures", 0) > 0 else "#22c55e",
+                PALETTE["danger"] if latest.get("critical_failures", 0) > 0 else PALETTE["success"],
                 "objetivo: 0",
             ),
         ]
@@ -83,7 +84,7 @@ def main() -> None:
 
     # ── Navegación ────────────────────────────────────────────────────────────
     st.markdown(
-        '<div style="font-size:1.2rem; font-weight:700; color:#e2e8f0; margin-bottom:0.75rem;">Navegar a</div>',
+        f'<div style="font-size:1.2rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.75rem;">Navegar a</div>',
         unsafe_allow_html=True,
     )
     nav_cols = st.columns(4)
@@ -135,10 +136,10 @@ def main() -> None:
 
     # ── Cómo Funciona ─────────────────────────────────────────────────────────
     st.markdown(
-        """
+        f"""
         <div style="margin-bottom:0.5rem;">
-            <span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">¿Cómo funciona LLM Eval Lab?</span><br>
-            <span style="font-size:0.88rem; color:#64748b;">Evalúa la calidad de cualquier chatbot de IA en 4 pasos</span>
+            <span style="font-size:1.2rem; font-weight:700; color:{PALETTE["text"]};">¿Cómo funciona LLM Eval Lab?</span><br>
+            <span style="font-size:0.88rem; color:{PALETTE["text_muted"]};">Evalúa la calidad de cualquier chatbot de IA en 4 pasos</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -178,10 +179,10 @@ def main() -> None:
 
     # ── Conceptos Clave de QA para IA ─────────────────────────────────────────
     st.markdown(
-        """
+        f"""
         <div style="margin-bottom:0.5rem;">
-            <span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">📚 Conceptos clave de QA para IA</span><br>
-            <span style="font-size:0.88rem; color:#64748b;">Aprende los fundamentos para evaluar LLMs como un profesional</span>
+            <span style="font-size:1.2rem; font-weight:700; color:{PALETTE["text"]};">📚 Conceptos clave de QA para IA</span><br>
+            <span style="font-size:0.88rem; color:{PALETTE["text_muted"]};">Aprende los fundamentos para evaluar LLMs como un profesional</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -264,7 +265,7 @@ def main() -> None:
         severities[c.severity] = severities.get(c.severity, 0) + 1
 
     st.markdown(
-        '<span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">📦 Dataset disponible</span>',
+        f'<span style="font-size:1.2rem; font-weight:700; color:{PALETTE["text"]};">📦 Dataset disponible</span>',
         unsafe_allow_html=True,
     )
 
@@ -286,7 +287,7 @@ def main() -> None:
     with ds_cols[-1]:
         sev_lines = " · ".join(f"{SEVERITY_ICONS[s]} {severities.get(s, 0)} {s}" for s in SEVERITY_ORDER if s in severities)
         st.markdown(
-            stat_card("Total Test Cases", f"📊 {len(cases)}", "#a78bfa", extra=sev_lines),
+            stat_card("Total Test Cases", f"📊 {len(cases)}", PALETTE["accent_soft"], extra=sev_lines),
             unsafe_allow_html=True,
         )
 
@@ -294,7 +295,7 @@ def main() -> None:
 
     # ── Ejecuciones Recientes ─────────────────────────────────────────────────
     st.markdown(
-        '<span style="font-size:1.2rem; font-weight:700; color:#e2e8f0;">📈 Ejecuciones recientes</span>',
+        f'<span style="font-size:1.2rem; font-weight:700; color:{PALETTE["text"]};">📈 Ejecuciones recientes</span>',
         unsafe_allow_html=True,
     )
     st.markdown("")
@@ -307,29 +308,29 @@ def main() -> None:
         info_col, chart_col = st.columns([2, 3])
         with info_col:
             crit = latest.get("critical_failures", 0)
-            crit_color = "#ef4444" if crit > 0 else "#22c55e"
+            crit_color = PALETTE["danger"] if crit > 0 else PALETTE["success"]
             st.markdown(
                 f"""
                 <div class="card">
-                    <div style="font-size:0.7rem; color:#6366f1; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; margin-bottom:0.5rem;">Último Run</div>
-                    <div style="font-size:1rem; font-weight:700; color:#e2e8f0;">{latest.get("run_id", "?")}</div>
-                    <div style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">{latest.get("timestamp", "")[:19]} · {latest.get("chatbot_id", "?")} ({latest.get("chatbot_mode", "?")})</div>
+                    <div style="font-size:0.7rem; color:{PALETTE["accent"]}; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; margin-bottom:0.5rem;">Último Run</div>
+                    <div style="font-size:1rem; font-weight:700; color:{PALETTE["text"]};">{latest.get("run_id", "?")}</div>
+                    <div style="font-size:0.8rem; color:{PALETTE["text_muted"]}; margin-bottom:1rem;">{latest.get("timestamp", "")[:19]} · {latest.get("chatbot_id", "?")} ({latest.get("chatbot_mode", "?")})</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
                         <div>
                             <div style="font-size:1.9rem; font-weight:800; color:{pr_color};">{pr:.0%}</div>
-                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Pass Rate</div>
+                            <div style="font-size:0.68rem; color:{PALETTE["text_soft"]}; text-transform:uppercase;">Pass Rate</div>
                         </div>
                         <div>
-                            <div style="font-size:1.9rem; font-weight:800; color:#38bdf8;">{latest.get("avg_score", 0):.3f}</div>
-                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Avg Score</div>
+                            <div style="font-size:1.9rem; font-weight:800; color:{PALETTE["info"]};">{latest.get("avg_score", 0):.3f}</div>
+                            <div style="font-size:0.68rem; color:{PALETTE["text_soft"]}; text-transform:uppercase;">Avg Score</div>
                         </div>
                         <div>
-                            <div style="font-size:1.4rem; font-weight:700; color:#e2e8f0;">{latest.get("avg_latency_ms", 0):.0f}ms</div>
-                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Avg Latency</div>
+                            <div style="font-size:1.4rem; font-weight:700; color:{PALETTE["text"]};">{latest.get("avg_latency_ms", 0):.0f}ms</div>
+                            <div style="font-size:0.68rem; color:{PALETTE["text_soft"]}; text-transform:uppercase;">Avg Latency</div>
                         </div>
                         <div>
                             <div style="font-size:1.4rem; font-weight:700; color:{crit_color};">{crit}</div>
-                            <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Critical Fails</div>
+                            <div style="font-size:0.68rem; color:{PALETTE["text_soft"]}; text-transform:uppercase;">Critical Fails</div>
                         </div>
                     </div>
                     <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
@@ -430,8 +431,8 @@ def main() -> None:
     # ── Footer ────────────────────────────────────────────────────────────────
     st.divider()
     st.markdown(
-        """
-        <div style="text-align:center; color:#374151; font-size:0.76rem; padding:0.5rem;">
+        f"""
+        <div style="text-align:center; color:{PALETTE["text_ghost"]}; font-size:0.76rem; padding:0.5rem;">
             LLM Eval Lab v0.3.0 · Built with Streamlit · RAGAS + DeepEval + Plotly
         </div>
         """,

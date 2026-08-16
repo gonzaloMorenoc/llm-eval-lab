@@ -23,6 +23,7 @@ from src.dashboard.components.metrics import kpi_row, score_bar, severity_icon
 from src.dashboard.components.shared import RESULTS_DIR, list_runs
 from src.dashboard.components.sidebar import render_sidebar
 from src.dashboard.components.styles import badge, callout, inject_css, page_header, stat_card
+from src.dashboard.components.theme import PALETTE
 
 st.set_page_config(page_title="Results — LLM Eval Lab", page_icon="📊", layout="wide")
 inject_css()
@@ -249,8 +250,8 @@ with tab_metrics:
 
     with ragas_col:
         st.markdown(
-            """
-            <div style="font-size:1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.5rem;">📐 RAGAS Metrics</div>
+            f"""
+            <div style="font-size:1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.5rem;">📐 RAGAS Metrics</div>
             <div class="metric-explain" style="margin-bottom:0.75rem;">
                 RAGAS evalúa la calidad del sistema de recuperación y generación.<br>
                 • <strong>Faithfulness</strong>: ¿la respuesta se basa en contexto real?<br>
@@ -274,11 +275,11 @@ with tab_metrics:
                 st.markdown(
                     f"""
                     <div style="display:flex; align-items:center; justify-content:space-between;
-                         padding:0.4rem 0; border-bottom:1px solid #2d2d44;">
-                        <span style="font-size:0.85rem; color:#e2e8f0;">{metric.replace("_", " ").title()}</span>
+                         padding:0.4rem 0; border-bottom:1px solid {PALETTE["border"]};">
+                        <span style="font-size:0.85rem; color:{PALETTE["text"]};">{metric.replace("_", " ").title()}</span>
                         <div style="display:flex; align-items:center; gap:0.5rem;">
-                            <span style="font-size:0.8rem; color:#94a3b8;">umbral {t}</span>
-                            <span style="font-size:0.85rem; font-weight:700; color:{"#4ade80" if passed else "#f87171"};">{avg:.3f}</span>
+                            <span style="font-size:0.8rem; color:{PALETTE["text_soft"]};">umbral {t}</span>
+                            <span style="font-size:0.85rem; font-weight:700; color:{PALETTE["success_bright"] if passed else PALETTE["danger_soft"]};">{avg:.3f}</span>
                             {status_badge}
                         </div>
                     </div>
@@ -293,8 +294,8 @@ with tab_metrics:
 
     with deepeval_col:
         st.markdown(
-            """
-            <div style="font-size:1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.5rem;">🔍 DeepEval Metrics</div>
+            f"""
+            <div style="font-size:1rem; font-weight:700; color:{PALETTE["text"]}; margin-bottom:0.5rem;">🔍 DeepEval Metrics</div>
             <div class="metric-explain" style="margin-bottom:0.75rem;">
                 DeepEval evalúa comportamiento adversarial y calidad general.<br>
                 • <strong>Hallucination</strong>: ¿el modelo inventa datos?<br>
@@ -319,11 +320,11 @@ with tab_metrics:
                 st.markdown(
                     f"""
                     <div style="display:flex; align-items:center; justify-content:space-between;
-                         padding:0.4rem 0; border-bottom:1px solid #2d2d44;">
-                        <span style="font-size:0.85rem; color:#e2e8f0;">{metric.replace("_", " ").title()}</span>
+                         padding:0.4rem 0; border-bottom:1px solid {PALETTE["border"]};">
+                        <span style="font-size:0.85rem; color:{PALETTE["text"]};">{metric.replace("_", " ").title()}</span>
                         <div style="display:flex; align-items:center; gap:0.5rem;">
-                            <span style="font-size:0.8rem; color:#94a3b8;">umbral {t}</span>
-                            <span style="font-size:0.85rem; font-weight:700; color:{"#4ade80" if passed else "#f87171"};">{avg:.3f}</span>
+                            <span style="font-size:0.8rem; color:{PALETTE["text_soft"]};">umbral {t}</span>
+                            <span style="font-size:0.85rem; font-weight:700; color:{PALETTE["success_bright"] if passed else PALETTE["danger_soft"]};">{avg:.3f}</span>
                             {status_badge}
                         </div>
                     </div>
@@ -360,10 +361,10 @@ with tab_latency:
 
         lat_cols = st.columns(4)
         lat_stats = [
-            ("Mínima", f"{min(latencies):.0f}ms", "#22c55e"),
-            ("Mediana P50", f"{sorted_lat[len(sorted_lat) // 2]:.0f}ms", "#6366f1"),
-            ("P95", f"{sorted_lat[p95_idx]:.0f}ms", "#f59e0b"),
-            ("Máxima", f"{max(latencies):.0f}ms", "#ef4444"),
+            ("Mínima", f"{min(latencies):.0f}ms", PALETTE["success"]),
+            ("Mediana P50", f"{sorted_lat[len(sorted_lat) // 2]:.0f}ms", PALETTE["accent"]),
+            ("P95", f"{sorted_lat[p95_idx]:.0f}ms", PALETTE["warning"]),
+            ("Máxima", f"{max(latencies):.0f}ms", PALETTE["danger"]),
         ]
         for col, (label, val, color) in zip(lat_cols, lat_stats, strict=False):
             with col:
@@ -422,12 +423,17 @@ st.divider()
 
 # ── Category Breakdown ────────────────────────────────────────────────────────
 st.markdown(
-    '<span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">📂 Resultados por Categoría</span>',
+    f'<span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">📂 Resultados por Categoría</span>',
     unsafe_allow_html=True,
 )
 by_cat = summary.get("by_category", {})
 cat_icons = {"functional": "⚡", "safety": "🛡️", "regression": "🔁", "multi_turn": "💬"}
-cat_colors = {"functional": "#6366f1", "safety": "#ef4444", "regression": "#22c55e", "multi_turn": "#38bdf8"}
+cat_colors = {
+    "functional": PALETTE["accent"],
+    "safety": PALETTE["danger"],
+    "regression": PALETTE["success"],
+    "multi_turn": PALETTE["info"],
+}
 
 if by_cat:
     cat_cols = st.columns(len(by_cat))
@@ -436,14 +442,14 @@ if by_cat:
             pr = stats.get("pass_rate", 0)
             color = cat_colors.get(cat, "#888")
             icon = cat_icons.get(cat, "📋")
-            pr_color = "#22c55e" if pr >= 0.7 else ("#f59e0b" if pr >= 0.5 else "#ef4444")
+            pr_color = PALETTE["success"] if pr >= 0.7 else (PALETTE["warning"] if pr >= 0.5 else PALETTE["danger"])
             st.markdown(
                 f"""
                 <div class="stat-card" style="border-left:3px solid {color}; text-align:center;">
                     <div style="font-size:1.5rem;">{icon}</div>
                     <div style="font-size:0.8rem; font-weight:700; color:{color}; margin:0.2rem 0;">{cat.replace("_", " ").title()}</div>
                     <div style="font-size:1.8rem; font-weight:800; color:{pr_color};">{pr:.0%}</div>
-                    <div style="font-size:0.7rem; color:#64748b;">
+                    <div style="font-size:0.7rem; color:{PALETTE["text_muted"]};">
                         ✅{stats.get("passed", 0)} ❌{stats.get("failed", 0)} / {stats.get("total", 0)}
                     </div>
                 </div>
@@ -455,7 +461,7 @@ st.divider()
 
 # ── Results Explorer ──────────────────────────────────────────────────────────
 st.markdown(
-    '<span style="font-size:1.1rem; font-weight:700; color:#e2e8f0;">🔍 Explorador de Resultados</span>',
+    f'<span style="font-size:1.1rem; font-weight:700; color:{PALETTE["text"]};">🔍 Explorador de Resultados</span>',
     unsafe_allow_html=True,
 )
 
@@ -500,7 +506,7 @@ if results:
         score = r.get("overall_score")
         icon = "✅" if passed else "❌"
         sev = severity_icon(tc.get("severity", "medium"))
-        border_color = "#22c55e" if passed else "#ef4444"
+        border_color = PALETTE["success"] if passed else PALETTE["danger"]
 
         label = f"{icon} {sev} **{tc.get('id', '?')}** — {tc.get('category', '?')} — Score: {f'{score:.3f}' if score is not None else '—'} — {r.get('latency_ms', 0):.0f}ms"
 

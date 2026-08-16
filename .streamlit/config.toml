@@ -1,0 +1,11 @@
+# Streamlit's own chrome — top bar, menus, native widgets — is themed here.
+# Without this file it falls back to Streamlit's default (light on most systems)
+# while the injected CSS paints the body dark, and the seam is visible.
+#
+# Values mirror src/dashboard/components/theme.py; keep them in sync.
+[theme]
+base = "dark"
+primaryColor = "#6366f1"
+backgroundColor = "#0f0f1a"
+secondaryBackgroundColor = "#1a1a2e"
+textColor = "#e2e8f0"

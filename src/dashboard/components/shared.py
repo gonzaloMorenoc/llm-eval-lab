@@ -16,6 +16,8 @@ from typing import Any
 
 import streamlit as st
 
+from src.dashboard.components.theme import PALETTE
+
 logger = logging.getLogger(__name__)
 
 
@@ -140,10 +142,10 @@ CATEGORY_DESCRIPTIONS: dict[str, str] = {
 }
 
 CATEGORY_LABEL_COLORS: dict[str, str] = {
-    "functional": "#6366f1",
-    "safety": "#ef4444",
-    "regression": "#22c55e",
-    "multi_turn": "#38bdf8",
+    "functional": PALETTE["accent"],
+    "safety": PALETTE["danger"],
+    "regression": PALETTE["success"],
+    "multi_turn": PALETTE["info"],
 }
 
 
@@ -165,7 +167,7 @@ SEVERITY_ORDER: list[str] = ["critical", "high", "medium", "low"]
 def pass_rate_color(rate: float) -> str:
     """Return a color hex for a given pass rate value."""
     if rate >= 0.7:
-        return "#22c55e"
+        return PALETTE["success"]
     if rate >= 0.5:
-        return "#f59e0b"
-    return "#ef4444"
+        return PALETTE["warning"]
+    return PALETTE["danger"]
