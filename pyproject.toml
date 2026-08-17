@@ -53,7 +53,7 @@ dependencies = [
     # Without this ceiling, `import ragas` raises ModuleNotFoundError on any
     # fresh install and the RAGAS evaluator is dead on arrival.
     # Remove once ragas stops importing it.
-    "langchain-community<0.4.2",
+    "langchain-community<0.4.3",
 ]
 
 [project.urls]
